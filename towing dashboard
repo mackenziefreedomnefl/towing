@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BMC Towing Dashboard</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #1d4ed8;
+      --success: #15803d;
+      --warning: #b45309;
+      --danger: #b91c1c;
+      --nav: #0f172a;
+      --nav-text: #e2e8f0;
+      --radius: 18px;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+    }
+
+    .sidebar {
+      background: var(--nav);
+      color: white;
+      padding: 24px;
+    }
+
+    .brand {
+      margin-bottom: 28px;
+    }
+
+    .brand h1 {
+      margin: 0 0 6px;
+      font-size: 1.55rem;
+    }
+
+    .brand p {
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    .nav {
+      display: grid;
+      gap: 10px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--nav-text);
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      display: block;
+    }
+
+    .nav a.active,
+    .nav a:hover {
+      background: rgba(59,130,246,0.18);
+      color: white;
+    }
+
+    .main {
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+
+    .topbar h2 {
+      margin: 0 0 6px;
+      font-size: 2rem;
+    }
+
+    .subtext {
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .controls input,
+    .controls select,
+    .controls button {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      background: white;
+    }
+
+    .controls button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      cursor: pointer;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .stat-label {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-note {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.82rem;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.94rem;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.84rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .tag.active {
+      background: #dcfce7;
+      color: var(--success);
+    }
+
+    .tag.transfer {
+      background: #fef3c7;
+      color: var(--warning);
+    }
+
+    .tag.expiring {
+      background: #fee2e2;
+      color: var(--danger);
+    }
+
+    .list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .list-item {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .list-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.98rem;
+    }
+
+    .list-item span {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .stats, .content-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>BMC Towing</h1>
+        <p>Fleet dashboard starter based on your current towing list.</p>
+      </div>
+
+      <nav class="nav">
+        <a href="#" class="active">Fleet Overview</a>
+        <a href="#">Active Boats</a>
+        <a href="#">Transfers</a>
+        <a href="#">Renewals</a>
+        <a href="#">Expirations</a>
+        <a href="#">Historical Lists</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h2>Towing Dashboard</h2>
+          <div class="subtext">Current source: Towing List sheet • fields include Boat ID, HIN, FL#, Boat Name, Home Port, Annual Dues, Active, Renewed, Transfer, Exp, and Requested.</div>
+        </div>
+
+        <div class="controls">
+          <input type="search" placeholder="Search boat name or FL#" />
+          <select>
+            <option>All Home Ports</option>
+            <option>Beach Marine</option>
+            <option>Camachee Cove</option>
+            <option>Julington Creek West</option>
+          </select>
+          <select>
+            <option>All Statuses</option>
+            <option>Active</option>
+            <option>Transfer</option>
+            <option>Expiring</option>
+          </select>
+          <button>Refresh List</button>
+        </div>
+      </div>
+
+      <section class="stats">
+        <div class="card">
+          <div class="stat-label">Total Boats Listed</div>
+          <div class="stat-value">122</div>
+          <div class="stat-note">Pulled from the current towing list sheet.</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Home Ports</div>
+          <div class="stat-value">3</div>
+          <div class="stat-note">Beach Marine, Camachee Cove, Julington Creek West</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Transfer Notes</div>
+          <div class="stat-value">7</div>
+          <div class="stat-note">Rows already showing XFR notes.</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Current Header</div>
+          <div class="stat-value">2.22.26</div>
+          <div class="stat-note">Using your latest update date shown on the sheet.</div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="card">
+          <div class="section-head">
+            <h3>Fleet Snapshot</h3>
+            <span class="pill">Real column structure</span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Boat ID</th>
+                <th>Boat Name</th>
+                <th>Home Port</th>
+                <th>FL#</th>
+                <th>Annual Dues</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>BT10827</td>
+                <td>Getting Reel V</td>
+                <td>Beach Marine</td>
+                <td>FL3379TZ</td>
+                <td>$300</td>
+                <td><span class="tag active">Active</span></td>
+              </tr>
+              <tr>
+                <td>BT10365</td>
+                <td>Reel Therapy VII</td>
+                <td>Beach Marine</td>
+                <td>FL1716UE</td>
+                <td>$350</td>
+                <td><span class="tag transfer">Transfer</span></td>
+              </tr>
+              <tr>
+                <td>BT10356</td>
+                <td>Out of Office IV</td>
+                <td>Camachee Cove</td>
+                <td>FL5528UA</td>
+                <td>$300</td>
+                <td><span class="tag active">Active</span></td>
+              </tr>
+              <tr>
+                <td>BT10367</td>
+                <td>Branch Office IV</td>
+                <td>Julington Creek West</td>
+                <td>FL7064UB</td>
+                <td>$300</td>
+                <td><span class="tag transfer">XFR Requested</span></td>
+              </tr>
+              <tr>
+                <td>BT10452</td>
+                <td>(904) Happy Hour V</td>
+                <td>Beach Marine</td>
+                <td>FL5531UA</td>
+                <td>$300</td>
+                <td><span class="tag expiring">Marked Transfer / Renewed</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <h3>What to build next</h3>
+          </div>
+
+          <div class="list">
+            <div class="list-item">
+              <strong>Status logic</strong>
+              <span>Convert Active, Renewed, Transfer, Exp, and Requested columns into one clean status system so each boat shows a single dashboard state.</span>
+            </div>
+            <div class="list-item">
+              <strong>Port totals</strong>
+              <span>Add grouped counts by home port with totals for Beach Marine, Camachee Cove, and Julington Creek West.</span>
+            </div>
+            <div class="list-item">
+              <strong>Expiring soon</strong>
+              <span>Turn the Excel expiration date field into a readable date and flag upcoming renewals automatically.</span>
+            </div>
+            <div class="list-item">
+              <strong>Historical compare</strong>
+              <span>Use your older Robert and Historical BUS sheets to show what changed from one version to the next.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h3>Notes</h3>
+        </div>
+        <div class="footer-note">
+          This starter is now aligned more closely with your actual workbook instead of placeholder towing tickets. Next, I’d recommend turning this into a live table with filters, summary cards by home port, and color-coded transfer / expiration flags.
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
