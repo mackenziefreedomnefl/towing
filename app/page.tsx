@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -23,25 +23,42 @@ interface Boat {
 
 export default function Home() {
   const [query, setQuery] = useState('');
-  const [boats, setBoats] = useState<Boat[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const search = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setBoats([]);
-      return;
-    }
-    setLoading(true);
-    const res = await fetch(`/api/boats?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
-    setBoats(data);
-    setLoading(false);
-  }, []);
+  const [allBoats, setAllBoats] = useState<Boat[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => search(query), 300);
-    return () => clearTimeout(timer);
-  }, [query, search]);
+    fetch('/api/boats').then(r => r.json()).then(data => {
+      setAllBoats(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return allBoats;
+    const q = query.toLowerCase();
+    return allBoats.filter(b =>
+      b.boat_id.toLowerCase().includes(q) ||
+      b.boat_name.toLowerCase().includes(q) ||
+      b.fl_number.toLowerCase().includes(q) ||
+      b.hin.toLowerCase().includes(q) ||
+      b.make.toLowerCase().includes(q) ||
+      b.home_port.toLowerCase().includes(q) ||
+      (b.year && String(b.year).includes(q)) ||
+      b.length.toLowerCase().includes(q)
+    );
+  }, [allBoats, query]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, Boat[]> = {};
+    for (const boat of filtered) {
+      const port = boat.home_port || 'Unknown';
+      if (!groups[port]) groups[port] = [];
+      groups[port].push(boat);
+    }
+    // Sort locations alphabetically
+    const sorted: [string, Boat[]][] = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    return sorted;
+  }, [filtered]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -99,95 +116,93 @@ export default function Home() {
           <input
             id="search"
             type="text"
-            placeholder="Search by boat name, BT number, FL#, or HIN..."
+            placeholder="Search by boat name, BT number, FL#, HIN, make, location..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full px-5 py-4 text-lg border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all shadow-sm bg-white"
             autoFocus
           />
+          {!loading && (
+            <p className="text-xs text-gray-400 mt-2 text-right">
+              {filtered.length} of {allBoats.length} boats
+            </p>
+          )}
         </div>
 
-        {/* Results */}
         {loading && (
-          <div className="text-center py-8 text-gray-500">Searching...</div>
+          <div className="text-center py-8 text-gray-500">Loading boats...</div>
         )}
 
-        {!loading && query && boats.length === 0 && (
+        {!loading && query && filtered.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             No boats found for &ldquo;{query}&rdquo;
           </div>
         )}
 
-        {!loading && !query && (
-          <div className="text-center py-12 text-gray-400">
-            <svg className="mx-auto h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-            <p className="text-lg">Type to search for a boat</p>
-            <p className="text-sm mt-1">Search by name, BT number, FL#, or HIN</p>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {boats.map((boat) => (
-            <div
-              key={boat.id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {boat.boat_name}
-                  </h2>
-                  <p className="text-blue-600 font-mono font-bold text-lg">
-                    {boat.boat_id}
-                  </p>
-                </div>
-                {boat.expiration && (
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    new Date(boat.expiration) > new Date()
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {new Date(boat.expiration) > new Date() ? 'Active' : 'Expired'}
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-500 block">FL#</span>
-                  <span className="font-medium">{boat.fl_number || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">HIN</span>
-                  <span className="font-medium font-mono text-xs">{boat.hin || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Make</span>
-                  <span className="font-medium">{boat.make || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Length</span>
-                  <span className="font-medium">{boat.length || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Year</span>
-                  <span className="font-medium">{boat.year || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">Home Port</span>
-                  <span className="font-medium">{boat.home_port || '—'}</span>
-                </div>
-                {boat.expiration && (
-                  <div>
-                    <span className="text-gray-500 block">Expires</span>
-                    <span className="font-medium">{boat.expiration}</span>
+        {/* Grouped by location */}
+        {!loading && grouped.map(([location, boats]) => (
+          <div key={location} className="mb-8">
+            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 sticky top-0 bg-gray-50 py-2 px-1 -mx-1 z-10 border-b border-gray-200">
+              {location} <span className="text-gray-400 font-normal">({boats.length})</span>
+            </h2>
+            <div className="space-y-3">
+              {boats.map((boat) => (
+                <div
+                  key={boat.id}
+                  className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {boat.boat_name}
+                      </h3>
+                      <p className="text-blue-600 font-mono font-bold text-lg">
+                        {boat.boat_id}
+                      </p>
+                    </div>
+                    {boat.expiration && (
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        new Date(boat.expiration) > new Date()
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {new Date(boat.expiration) > new Date() ? 'Active' : 'Expired'}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500 block">FL#</span>
+                      <span className="font-medium">{boat.fl_number || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">HIN</span>
+                      <span className="font-medium font-mono text-xs">{boat.hin || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Make</span>
+                      <span className="font-medium">{boat.make || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Length</span>
+                      <span className="font-medium">{boat.length || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Year</span>
+                      <span className="font-medium">{boat.year || '—'}</span>
+                    </div>
+                    {boat.expiration && (
+                      <div>
+                        <span className="text-gray-500 block">Expires</span>
+                        <span className="font-medium">{boat.expiration}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </main>
 
       {/* Footer */}
