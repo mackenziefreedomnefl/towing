@@ -479,11 +479,13 @@ export default function AdminPage() {
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [newNoteText, setNewNoteText] = useState<Record<number, string>>({});
   const [newNoteAuthor, setNewNoteAuthor] = useState('');
+  interface FleetioInfo { hin: string; name: string; make: string; year: string; length: string; model: string; fl_number: string; group: string; fleetio_id: string }
+  interface TowingInfo { boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string }
   const [auditResult, setAuditResult] = useState<{
-    summary: { fleetioTotal: number; towingActive: number; matched: number; towingOnly: number; fleetioOnly: number };
-    matched: Array<{ hin: string; towingBoat: { boat_id: string; boat_name: string; make: string; home_port: string }; fleetioName: string }>;
-    towingOnly: Array<{ hin: string; boat_id: string; boat_name: string; make: string; home_port: string }>;
-    fleetioOnly: Array<{ hin: string; name: string }>;
+    summary: { fleetioTotal: number; towingActive: number; matched: number; towingOnly: number; fleetioOnly: number; withMismatches: number };
+    matched: Array<{ hin: string; towing: TowingInfo; fleetio: FleetioInfo; mismatches: string[] }>;
+    towingOnly: Array<{ hin: string } & TowingInfo>;
+    fleetioOnly: FleetioInfo[];
     hinColumn: string;
   } | null>(null);
   const [auditUploading, setAuditUploading] = useState(false);
@@ -939,7 +941,7 @@ export default function AdminPage() {
             {auditResult && (
               <>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
                     <div className="text-2xl font-bold text-gray-900">{auditResult.summary.fleetioTotal}</div>
                     <div className="text-xs text-gray-500 mt-1">Fleetio Boats</div>
@@ -951,6 +953,10 @@ export default function AdminPage() {
                   <div className="bg-white rounded-xl border border-green-300 bg-green-50 p-4 text-center">
                     <div className="text-2xl font-bold text-green-700">{auditResult.summary.matched}</div>
                     <div className="text-xs text-green-600 mt-1">Matched</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-orange-300 bg-orange-50 p-4 text-center">
+                    <div className="text-2xl font-bold text-orange-700">{auditResult.summary.withMismatches}</div>
+                    <div className="text-xs text-orange-600 mt-1">Mismatches</div>
                   </div>
                   <div className="bg-white rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-center">
                     <div className="text-2xl font-bold text-yellow-700">{auditResult.summary.towingOnly}</div>
@@ -964,35 +970,56 @@ export default function AdminPage() {
 
                 <p className="text-xs text-gray-400">Matched on column: <strong>{auditResult.hinColumn}</strong></p>
 
-                {/* Matched */}
+                {/* Matched — with side-by-side comparison */}
                 {auditResult.matched.length > 0 && (
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
                     <div className="px-5 py-3 border-b border-gray-200 bg-green-50">
-                      <h3 className="text-sm font-semibold text-green-800">Matched — In Both Systems ({auditResult.matched.length})</h3>
+                      <h3 className="text-sm font-semibold text-green-800">
+                        Matched — In Both Systems ({auditResult.matched.length})
+                        {auditResult.summary.withMismatches > 0 && (
+                          <span className="ml-2 text-orange-600 font-normal">({auditResult.summary.withMismatches} with mismatches)</span>
+                        )}
+                      </h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">BT#</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Towing Name</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Fleetio Name</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Make</th>
-                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Home Port</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">HIN</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">BT#</th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 border-l border-blue-200 bg-blue-50/50">Towing Name</th>
+                            <th className="px-3 py-2 text-left font-semibold text-purple-600 bg-purple-50/50">Fleetio Name</th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 bg-blue-50/50">Towing FL#</th>
+                            <th className="px-3 py-2 text-left font-semibold text-purple-600 bg-purple-50/50">Fleetio FL#</th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 bg-blue-50/50">Towing Make</th>
+                            <th className="px-3 py-2 text-left font-semibold text-purple-600 bg-purple-50/50">Fleetio Make</th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 bg-blue-50/50">Towing Year</th>
+                            <th className="px-3 py-2 text-left font-semibold text-purple-600 bg-purple-50/50">Fleetio Year</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Length</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600">Model</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {auditResult.matched.map((m, i) => (
-                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="px-4 py-2 font-mono text-xs">{m.hin}</td>
-                              <td className="px-4 py-2 font-mono font-medium text-blue-600">{m.towingBoat.boat_id}</td>
-                              <td className="px-4 py-2">{m.towingBoat.boat_name}</td>
-                              <td className="px-4 py-2 text-gray-500">{m.fleetioName}</td>
-                              <td className="px-4 py-2">{m.towingBoat.make}</td>
-                              <td className="px-4 py-2">{m.towingBoat.home_port}</td>
-                            </tr>
-                          ))}
+                          {auditResult.matched.map((m, i) => {
+                            const hasMismatch = m.mismatches.length > 0;
+                            const mm = new Set(m.mismatches);
+                            return (
+                              <tr key={i} className={`border-b border-gray-100 ${hasMismatch ? 'bg-orange-50/40' : 'hover:bg-gray-50'}`}>
+                                <td className="px-3 py-2 font-mono text-xs">{m.hin}</td>
+                                <td className="px-3 py-2 font-mono font-medium text-blue-600">{m.towing.boat_id}</td>
+                                <td className="px-3 py-2 border-l border-blue-100">{m.towing.boat_name}</td>
+                                <td className="px-3 py-2 text-gray-500">{m.fleetio.name}</td>
+                                <td className={`px-3 py-2 ${mm.has('fl_number') ? 'bg-orange-100 font-semibold text-orange-800' : ''}`}>{m.towing.fl_number}</td>
+                                <td className={`px-3 py-2 ${mm.has('fl_number') ? 'bg-orange-100 font-semibold text-orange-800' : 'text-gray-500'}`}>{m.fleetio.fl_number}</td>
+                                <td className={`px-3 py-2 ${mm.has('make') ? 'bg-orange-100 font-semibold text-orange-800' : ''}`}>{m.towing.make}</td>
+                                <td className={`px-3 py-2 ${mm.has('make') ? 'bg-orange-100 font-semibold text-orange-800' : 'text-gray-500'}`}>{m.fleetio.make}</td>
+                                <td className={`px-3 py-2 ${mm.has('year') ? 'bg-orange-100 font-semibold text-orange-800' : ''}`}>{m.towing.year}</td>
+                                <td className={`px-3 py-2 ${mm.has('year') ? 'bg-orange-100 font-semibold text-orange-800' : 'text-gray-500'}`}>{m.fleetio.year}</td>
+                                <td className="px-3 py-2 text-gray-500">{m.fleetio.length}</td>
+                                <td className="px-3 py-2 text-gray-500">{m.fleetio.model}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1013,8 +1040,12 @@ export default function AdminPage() {
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">BT#</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Boat Name</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">FL#</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Make</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Home Port</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Year</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Length</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Expires</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1023,8 +1054,12 @@ export default function AdminPage() {
                               <td className="px-4 py-2 font-mono text-xs">{b.hin}</td>
                               <td className="px-4 py-2 font-mono font-medium">{b.boat_id}</td>
                               <td className="px-4 py-2">{b.boat_name}</td>
+                              <td className="px-4 py-2">{b.fl_number}</td>
                               <td className="px-4 py-2">{b.make}</td>
                               <td className="px-4 py-2">{b.home_port}</td>
+                              <td className="px-4 py-2">{b.year}</td>
+                              <td className="px-4 py-2">{b.length}</td>
+                              <td className="px-4 py-2">{b.expiration}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1033,7 +1068,7 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* Fleetio Only */}
+                {/* Fleetio Only — full details */}
                 {auditResult.fleetioOnly.length > 0 && (
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
                     <div className="px-5 py-3 border-b border-gray-200 bg-red-50">
@@ -1046,6 +1081,12 @@ export default function AdminPage() {
                           <tr className="bg-gray-50 border-b border-gray-200">
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Fleetio Name</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">FL#</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Make</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Year</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Length</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Model</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Group</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1053,6 +1094,12 @@ export default function AdminPage() {
                             <tr key={i} className="border-b border-gray-100 hover:bg-red-50">
                               <td className="px-4 py-2 font-mono text-xs">{b.hin}</td>
                               <td className="px-4 py-2">{b.name}</td>
+                              <td className="px-4 py-2">{b.fl_number}</td>
+                              <td className="px-4 py-2">{b.make}</td>
+                              <td className="px-4 py-2">{b.year}</td>
+                              <td className="px-4 py-2">{b.length}</td>
+                              <td className="px-4 py-2">{b.model}</td>
+                              <td className="px-4 py-2 text-xs">{b.group}</td>
                             </tr>
                           ))}
                         </tbody>

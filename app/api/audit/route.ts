@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllBoats } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
+function findCol(headers: string[], ...candidates: string[]): string | undefined {
+  return headers.find((h) => {
+    const lower = h.toLowerCase().trim();
+    return candidates.includes(lower);
+  });
+}
+
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file') as File | null;
@@ -10,11 +17,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
   }
 
-  // Read the file into a buffer
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
-  // Parse with xlsx (handles both CSV and XLSX)
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
@@ -24,25 +29,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No data found in file' }, { status: 400 });
   }
 
-  // Find the HIN column — look for common header names
   const headers = Object.keys(rows[0]);
-  const hinKey = headers.find((h) => {
-    const lower = h.toLowerCase().trim();
-    return (
-      lower === 'hin' ||
-      lower === 'hull id' ||
-      lower === 'hull id number' ||
-      lower === 'hull_id' ||
-      lower === 'hull identification number' ||
-      lower === 'vin' ||
-      lower === 'vin/sn' ||
-      lower === 'vin/serial' ||
-      lower === 'serial number' ||
-      lower === 'hull number' ||
-      lower === 'hull #'
-    );
-  });
 
+  // Detect columns
+  const hinKey = findCol(headers, 'hin', 'hull id', 'hull id number', 'hull_id', 'hull identification number', 'vin', 'vin/sn', 'vin/serial', 'serial number', 'hull number', 'hull #');
   if (!hinKey) {
     return NextResponse.json(
       { error: `Could not find HIN column. Found columns: ${headers.join(', ')}`, headers },
@@ -50,83 +40,99 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Also try to find a name column for display
-  const nameKey = headers.find((h) => {
-    const lower = h.toLowerCase().trim();
-    return lower === 'name' || lower === 'boat name' || lower === 'boat_name' || lower === 'vessel name' || lower === 'vessel';
-  });
+  const nameKey = findCol(headers, 'name', 'boat name', 'boat_name', 'vessel name', 'vessel');
+  const makeKey = findCol(headers, 'make', 'manufacturer');
+  const yearKey = findCol(headers, 'year', 'model year');
+  const lengthKey = findCol(headers, 'boat title length', 'length', 'loa');
+  const modelKey = findCol(headers, 'model', 'model name');
+  const flKey = findCol(headers, 'license plate', 'fl#', 'fl number', 'fl_number', 'registration', 'reg');
+  const groupKey = findCol(headers, 'group', 'location', 'home port');
+  const idKey = findCol(headers, 'fleetio id', 'id');
 
-  // Extract HINs from uploaded file
+  // Extract all data from uploaded file
+  const str = (row: Record<string, unknown>, key: string | undefined) =>
+    key ? String(row[key] ?? '').trim() : '';
+
   const fleetioBoats = rows
     .map((row) => ({
-      hin: String(row[hinKey] ?? '').trim().toUpperCase(),
-      name: nameKey ? String(row[nameKey] ?? '').trim() : '',
-      raw: row,
+      hin: str(row, hinKey).toUpperCase(),
+      name: str(row, nameKey),
+      make: str(row, makeKey),
+      year: str(row, yearKey),
+      length: str(row, lengthKey),
+      model: str(row, modelKey),
+      fl_number: str(row, flKey),
+      group: str(row, groupKey),
+      fleetio_id: str(row, idKey),
     }))
     .filter((b) => b.hin.length > 0);
 
-  // Get all active boats from our DB
+  // Get active boats from DB
   const activeBoats = getAllBoats(false);
-  const allBoats = getAllBoats(true);
 
-  // Build a lookup by HIN (normalize to uppercase, trim whitespace)
-  const towingByHin = new Map<string, typeof activeBoats[0]>();
+  const towingByHin = new Map<typeof activeBoats[0], string>();
   for (const boat of activeBoats) {
     const hin = (boat.hin || '').trim().toUpperCase();
-    if (hin) towingByHin.set(hin, boat);
+    if (hin) towingByHin.set(boat, hin);
+  }
+
+  // Reverse lookup: hin -> towing boat
+  const towingHinMap = new Map<string, typeof activeBoats[0]>();
+  for (const [boat, hin] of towingByHin) {
+    towingHinMap.set(hin, boat);
   }
 
   const fleetioHins = new Set(fleetioBoats.map((b) => b.hin));
 
-  // Categorize
-  const matched: Array<{
-    hin: string;
-    towingBoat: { boat_id: string; boat_name: string; make: string; home_port: string };
-    fleetioName: string;
-  }> = [];
+  type FleetioInfo = typeof fleetioBoats[0];
+  type TowingInfo = { boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string };
 
-  const towingOnly: Array<{
-    hin: string;
-    boat_id: string;
-    boat_name: string;
-    make: string;
-    home_port: string;
-  }> = [];
+  const toTowingInfo = (b: typeof activeBoats[0]): TowingInfo => ({
+    boat_id: b.boat_id,
+    boat_name: b.boat_name,
+    make: b.make,
+    home_port: b.home_port,
+    year: b.year,
+    length: b.length,
+    fl_number: b.fl_number,
+    expiration: b.expiration,
+  });
 
-  const fleetioOnly: Array<{
-    hin: string;
-    name: string;
-  }> = [];
+  const matched: Array<{ hin: string; towing: TowingInfo; fleetio: FleetioInfo; mismatches: string[] }> = [];
+  const towingOnly: Array<{ hin: string } & TowingInfo> = [];
+  const fleetioOnly: FleetioInfo[] = [];
 
-  // Check each fleetio boat against towing list
   for (const fb of fleetioBoats) {
-    const towingBoat = towingByHin.get(fb.hin);
+    const towingBoat = towingHinMap.get(fb.hin);
     if (towingBoat) {
+      // Check for mismatches
+      const mismatches: string[] = [];
+      const tMake = (towingBoat.make || '').trim().toUpperCase();
+      const fMake = (fb.make || '').trim().toUpperCase();
+      if (tMake && fMake && tMake !== fMake) mismatches.push('make');
+
+      const tYear = towingBoat.year ? String(towingBoat.year) : '';
+      const fYear = fb.year || '';
+      if (tYear && fYear && tYear !== fYear) mismatches.push('year');
+
+      const tFL = (towingBoat.fl_number || '').trim().toUpperCase();
+      const fFL = (fb.fl_number || '').trim().toUpperCase();
+      if (tFL && fFL && tFL !== fFL) mismatches.push('fl_number');
+
       matched.push({
         hin: fb.hin,
-        towingBoat: {
-          boat_id: towingBoat.boat_id,
-          boat_name: towingBoat.boat_name,
-          make: towingBoat.make,
-          home_port: towingBoat.home_port,
-        },
-        fleetioName: fb.name,
+        towing: toTowingInfo(towingBoat),
+        fleetio: fb,
+        mismatches,
       });
     } else {
-      fleetioOnly.push({ hin: fb.hin, name: fb.name });
+      fleetioOnly.push(fb);
     }
   }
 
-  // Check each towing boat not in fleetio
-  for (const [hin, boat] of towingByHin) {
+  for (const [boat, hin] of towingByHin) {
     if (!fleetioHins.has(hin)) {
-      towingOnly.push({
-        hin,
-        boat_id: boat.boat_id,
-        boat_name: boat.boat_name,
-        make: boat.make,
-        home_port: boat.home_port,
-      });
+      towingOnly.push({ hin, ...toTowingInfo(boat) });
     }
   }
 
@@ -137,11 +143,11 @@ export async function POST(request: NextRequest) {
       matched: matched.length,
       towingOnly: towingOnly.length,
       fleetioOnly: fleetioOnly.length,
+      withMismatches: matched.filter((m) => m.mismatches.length > 0).length,
     },
     matched,
     towingOnly,
     fleetioOnly,
     hinColumn: hinKey,
-    nameColumn: nameKey || null,
   });
 }
