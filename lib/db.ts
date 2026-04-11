@@ -27,6 +27,16 @@ function getDb(): Database.Database {
         expiration TEXT
       )
     `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        boat_id TEXT,
+        boat_name TEXT,
+        details TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
   }
   return db;
 }
@@ -46,6 +56,27 @@ export interface Boat {
   renewed: string;
   transfer: string;
   expiration: string;
+}
+
+export interface ActivityEntry {
+  id: number;
+  action: string;
+  boat_id: string;
+  boat_name: string;
+  details: string;
+  created_at: string;
+}
+
+function logActivity(action: string, boatId: string, boatName: string, details: string) {
+  getDb().prepare(
+    'INSERT INTO activity_log (action, boat_id, boat_name, details) VALUES (?, ?, ?, ?)'
+  ).run(action, boatId, boatName, details);
+}
+
+export function getRecentActivity(limit: number = 50): ActivityEntry[] {
+  return getDb().prepare(
+    'SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?'
+  ).all(limit) as ActivityEntry[];
 }
 
 export function getAllBoats(): Boat[] {
@@ -80,12 +111,21 @@ export function createBoat(boat: Omit<Boat, 'id'>): Boat {
     boat.home_port, boat.year, boat.length, boat.annual_dues,
     boat.active, boat.renewed, boat.transfer, boat.expiration
   );
+  logActivity('Added', boat.boat_id, boat.boat_name, `New boat added: ${boat.make} ${boat.length} at ${boat.home_port}`);
   return getBoat(result.lastInsertRowid as number)!;
 }
 
 export function updateBoat(id: number, boat: Partial<Omit<Boat, 'id'>>): Boat | undefined {
   const current = getBoat(id);
   if (!current) return undefined;
+
+  const changes: string[] = [];
+  const currentRec = current as unknown as Record<string, unknown>;
+  for (const [key, val] of Object.entries(boat)) {
+    if (val !== undefined && val !== currentRec[key]) {
+      changes.push(`${key}: ${currentRec[key]} → ${val}`);
+    }
+  }
 
   const updated = { ...current, ...boat };
   getDb().prepare(`
@@ -100,10 +140,14 @@ export function updateBoat(id: number, boat: Partial<Omit<Boat, 'id'>>): Boat | 
     updated.active, updated.renewed, updated.transfer, updated.expiration,
     id
   );
+  logActivity('Edited', updated.boat_id, updated.boat_name, changes.join(', ') || 'No field changes');
   return getBoat(id);
 }
 
 export function deleteBoat(id: number): boolean {
+  const current = getBoat(id);
+  if (!current) return false;
+  logActivity('Deleted', current.boat_id, current.boat_name, `Removed from system`);
   const result = getDb().prepare('DELETE FROM boats WHERE id = ?').run(id);
   return result.changes > 0;
 }
