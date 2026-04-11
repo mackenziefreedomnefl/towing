@@ -191,7 +191,7 @@ export default function Home() {
                         </span>
                       ) : jc ? (
                         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                          Different Provider
+                          BoatUS
                         </span>
                       ) : null}
                     </div>
@@ -229,14 +229,15 @@ export default function Home() {
                     }`}>
                       {jc ? (
                         <>
-                          <p className="text-xs font-medium uppercase tracking-wide opacity-90">Call for Towing</p>
+                          <p className="text-xs font-bold uppercase tracking-wide">BoatUS — No Membership — Club Pays Out of Pocket</p>
                           <a href="tel:3866756231" className="text-2xl font-bold tracking-wider hover:underline">
                             (386) 675-6231
                           </a>
+                          <p className="text-xs mt-1 font-semibold opacity-90">Notify Ops Management Before Calling for Tow</p>
                         </>
                       ) : (
                         <>
-                          <p className="text-xs font-medium uppercase tracking-wide opacity-90">BMC Towing — Contact: Rob (California time)</p>
+                          <p className="text-xs font-medium uppercase tracking-wide opacity-90">BMC Towing — Contact: Rob ({new Date().toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true })} his time)</p>
                           <a href="tel:6199296743" className="text-2xl font-bold tracking-wider hover:underline">
                             619-929-6743
                           </a>
