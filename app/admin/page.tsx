@@ -138,14 +138,14 @@ function TransferModal({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({
-    boat_id: '',
-    hin: boat.hin,
-    fl_number: boat.fl_number,
-    boat_name: boat.boat_name,
+    boat_id: boat.boat_id,
+    hin: '',
+    fl_number: '',
+    boat_name: '',
     make: boat.make,
     home_port: boat.home_port,
     year: boat.year,
-    length: boat.length,
+    length: '',
     annual_dues: boat.annual_dues,
     active: boat.active,
     renewed: boat.renewed,
@@ -159,17 +159,17 @@ function TransferModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-bold mb-1">Transfer BT#</h2>
+        <h2 className="text-lg font-bold mb-1">Transfer Boat</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Archiving <strong>{boat.boat_id}</strong> ({boat.boat_name}). Fill in the new boat info below.
+          Transferring <strong>{boat.boat_id}</strong> ({boat.boat_name}). Update the boat info below. BT# usually stays the same.
         </p>
         <div className="bg-gray-50 rounded-lg p-3 mb-4 text-xs text-gray-500">
           <span className="font-semibold">Old:</span> {boat.boat_id} &mdash; {boat.boat_name} &mdash; {boat.fl_number} &mdash; {boat.make} {boat.length} ({boat.year})
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New BT Number *</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.boat_id} onChange={(e) => set('boat_id', e.target.value)} placeholder="BT10999" autoFocus />
+            <label className="block text-sm font-medium text-gray-700 mb-1">BT Number</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.boat_id} onChange={(e) => set('boat_id', e.target.value)} placeholder="BT10999" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Boat Name</label>
@@ -472,13 +472,22 @@ export default function AdminPage() {
   const [transferring, setTransferring] = useState<Boat | null>(null);
   const [viewing, setViewing] = useState<Boat | null>(null);
   const [archiveConfirm, setArchiveConfirm] = useState<Boat | null>(null);
-  const [tab, setTab] = useState<'boats' | 'archived' | 'activity'>('boats');
+  const [tab, setTab] = useState<'boats' | 'archived' | 'activity' | 'audit'>('boats');
   const [sortCol, setSortCol] = useState<string>('boat_id');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [boatNotes, setBoatNotes] = useState<Record<number, BoatNote[]>>({});
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [newNoteText, setNewNoteText] = useState<Record<number, string>>({});
   const [newNoteAuthor, setNewNoteAuthor] = useState('');
+  const [auditResult, setAuditResult] = useState<{
+    summary: { fleetioTotal: number; towingActive: number; matched: number; towingOnly: number; fleetioOnly: number };
+    matched: Array<{ hin: string; towingBoat: { boat_id: string; boat_name: string; make: string; home_port: string }; fleetioName: string }>;
+    towingOnly: Array<{ hin: string; boat_id: string; boat_name: string; make: string; home_port: string }>;
+    fleetioOnly: Array<{ hin: string; name: string }>;
+    hinColumn: string;
+  } | null>(null);
+  const [auditUploading, setAuditUploading] = useState(false);
+  const [auditError, setAuditError] = useState('');
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_auth') === 'true') setAuthed(true);
@@ -638,7 +647,7 @@ export default function AdminPage() {
 
   async function handleTransfer(oldBoat: Boat, newBoat: Omit<Boat, 'id' | 'archived'>, note: string) {
     // Build a change summary
-    const fields = ['boat_name', 'hin', 'fl_number', 'make', 'home_port', 'year', 'length', 'annual_dues', 'expiration'] as const;
+    const fields = ['boat_id', 'boat_name', 'hin', 'fl_number', 'make', 'home_port', 'year', 'length', 'annual_dues', 'expiration'] as const;
     const changes: string[] = [];
     const oldRec = oldBoat as unknown as Record<string, unknown>;
     const newRec = newBoat as unknown as Record<string, unknown>;
@@ -649,29 +658,68 @@ export default function AdminPage() {
     }
     const changeSummary = changes.length > 0 ? changes.join(', ') : 'No field changes';
 
-    // Archive the old boat
-    await fetch(`/api/boats/${oldBoat.id}/archive`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason: `Transferred to ${newBoat.boat_id}` }),
-    });
-    // Add detailed note to old boat
-    await fetch(`/api/boats/${oldBoat.id}/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        author: 'System',
-        note: `Transferred to ${newBoat.boat_id}. Changes: ${changeSummary}${note ? '. ' + note : ''}`,
-      }),
-    });
-    // Create new boat with updated info
-    await fetch('/api/boats', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newBoat),
-    });
+    const sameBT = newBoat.boat_id.trim() === oldBoat.boat_id.trim();
+
+    if (sameBT) {
+      // Same BT# — update the existing boat in place
+      await fetch(`/api/boats/${oldBoat.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newBoat, transfer: newBoat.transfer || `Transfer ${new Date().toISOString().split('T')[0]}` }),
+      });
+      // Add transfer note with old info
+      await fetch(`/api/boats/${oldBoat.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: 'System',
+          note: `Transfer (same BT#). Old info: ${oldBoat.boat_name}, HIN: ${oldBoat.hin}, FL#: ${oldBoat.fl_number}, Make: ${oldBoat.make}, Length: ${oldBoat.length}, Year: ${oldBoat.year}. Changes: ${changeSummary}${note ? '. ' + note : ''}`,
+        }),
+      });
+    } else {
+      // Different BT# — archive old, create new
+      await fetch(`/api/boats/${oldBoat.id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: `Transferred to ${newBoat.boat_id}` }),
+      });
+      await fetch(`/api/boats/${oldBoat.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          author: 'System',
+          note: `Transferred to ${newBoat.boat_id}. Changes: ${changeSummary}${note ? '. ' + note : ''}`,
+        }),
+      });
+      await fetch('/api/boats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBoat),
+      });
+    }
     setTransferring(null);
     load();
+  }
+
+  async function handleAuditUpload(file: File) {
+    setAuditUploading(true);
+    setAuditError('');
+    setAuditResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/audit', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setAuditError(data.error || 'Upload failed');
+      } else {
+        setAuditResult(data);
+      }
+    } catch {
+      setAuditError('Failed to upload file');
+    } finally {
+      setAuditUploading(false);
+    }
   }
 
   if (!authed) return <PasscodeGate onAuth={() => setAuthed(true)} />;
@@ -696,7 +744,7 @@ export default function AdminPage() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 max-w-md">
-          {(['boats', 'archived', 'activity'] as const).map((t) => (
+          {(['boats', 'archived', 'activity', 'audit'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -857,6 +905,164 @@ export default function AdminPage() {
             </div>
             <p className="text-sm text-gray-400 mt-4">{boats.length} boats</p>
           </>
+        )}
+
+        {tab === 'audit' && (
+          <div className="space-y-6">
+            {/* Upload Section */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Fleetio Audit</h2>
+              <p className="text-sm text-gray-500 mb-4">Upload a Fleetio export (CSV or Excel) to match boats by HIN against the towing list.</p>
+              <div className="flex items-center gap-4">
+                <label className="cursor-pointer px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                  {auditUploading ? 'Uploading...' : 'Choose File'}
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    disabled={auditUploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleAuditUpload(f);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {auditResult && (
+                  <button onClick={() => { setAuditResult(null); setAuditError(''); }} className="text-sm text-gray-500 hover:text-gray-700">Clear Results</button>
+                )}
+              </div>
+              {auditError && <p className="text-sm text-red-600 mt-3">{auditError}</p>}
+            </div>
+
+            {/* Results */}
+            {auditResult && (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                    <div className="text-2xl font-bold text-gray-900">{auditResult.summary.fleetioTotal}</div>
+                    <div className="text-xs text-gray-500 mt-1">Fleetio Boats</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                    <div className="text-2xl font-bold text-gray-900">{auditResult.summary.towingActive}</div>
+                    <div className="text-xs text-gray-500 mt-1">Towing Active</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-green-300 bg-green-50 p-4 text-center">
+                    <div className="text-2xl font-bold text-green-700">{auditResult.summary.matched}</div>
+                    <div className="text-xs text-green-600 mt-1">Matched</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-center">
+                    <div className="text-2xl font-bold text-yellow-700">{auditResult.summary.towingOnly}</div>
+                    <div className="text-xs text-yellow-600 mt-1">Towing Only</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-red-300 bg-red-50 p-4 text-center">
+                    <div className="text-2xl font-bold text-red-700">{auditResult.summary.fleetioOnly}</div>
+                    <div className="text-xs text-red-600 mt-1">Fleetio Only</div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-400">Matched on column: <strong>{auditResult.hinColumn}</strong></p>
+
+                {/* Matched */}
+                {auditResult.matched.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <div className="px-5 py-3 border-b border-gray-200 bg-green-50">
+                      <h3 className="text-sm font-semibold text-green-800">Matched — In Both Systems ({auditResult.matched.length})</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">BT#</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Towing Name</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Fleetio Name</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Make</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Home Port</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditResult.matched.map((m, i) => (
+                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-4 py-2 font-mono text-xs">{m.hin}</td>
+                              <td className="px-4 py-2 font-mono font-medium text-blue-600">{m.towingBoat.boat_id}</td>
+                              <td className="px-4 py-2">{m.towingBoat.boat_name}</td>
+                              <td className="px-4 py-2 text-gray-500">{m.fleetioName}</td>
+                              <td className="px-4 py-2">{m.towingBoat.make}</td>
+                              <td className="px-4 py-2">{m.towingBoat.home_port}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Towing Only */}
+                {auditResult.towingOnly.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <div className="px-5 py-3 border-b border-gray-200 bg-yellow-50">
+                      <h3 className="text-sm font-semibold text-yellow-800">Towing Only — Not in Fleetio ({auditResult.towingOnly.length})</h3>
+                      <p className="text-xs text-yellow-600 mt-0.5">These boats have towing coverage but were not found in the Fleetio export.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">BT#</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Boat Name</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Make</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Home Port</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditResult.towingOnly.map((b, i) => (
+                            <tr key={i} className="border-b border-gray-100 hover:bg-yellow-50">
+                              <td className="px-4 py-2 font-mono text-xs">{b.hin}</td>
+                              <td className="px-4 py-2 font-mono font-medium">{b.boat_id}</td>
+                              <td className="px-4 py-2">{b.boat_name}</td>
+                              <td className="px-4 py-2">{b.make}</td>
+                              <td className="px-4 py-2">{b.home_port}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fleetio Only */}
+                {auditResult.fleetioOnly.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <div className="px-5 py-3 border-b border-gray-200 bg-red-50">
+                      <h3 className="text-sm font-semibold text-red-800">Fleetio Only — Not in Towing List ({auditResult.fleetioOnly.length})</h3>
+                      <p className="text-xs text-red-600 mt-0.5">These boats are in Fleetio but do not have towing coverage.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">HIN</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600">Fleetio Name</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {auditResult.fleetioOnly.map((b, i) => (
+                            <tr key={i} className="border-b border-gray-100 hover:bg-red-50">
+                              <td className="px-4 py-2 font-mono text-xs">{b.hin}</td>
+                              <td className="px-4 py-2">{b.name}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
 
         {tab === 'activity' && (
