@@ -70,7 +70,7 @@ export default function Home() {
       {/* Main */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
         {/* Phone Banner */}
-        <div className="bg-blue-600 text-white rounded-xl p-6 mb-8 text-center shadow-lg">
+        <div className="bg-blue-600 text-white rounded-xl p-6 mb-6 text-center shadow-lg">
           <p className="text-sm font-medium uppercase tracking-wide opacity-90 mb-1">
             BMC Towing - Call to Request a Tow
           </p>
@@ -80,7 +80,17 @@ export default function Home() {
           >
             619-929-6743
           </a>
-          <p className="text-sm opacity-75 mt-2">Robert Butler - San Diego</p>
+          <p className="text-sm opacity-75 mt-2">Contact: Rob (California time)</p>
+        </div>
+
+        {/* Call Checklist */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 text-sm">
+          <p className="font-semibold text-amber-800 mb-2">Before calling, have ready:</p>
+          <ul className="space-y-1 text-amber-700">
+            <li>&#8226; Lat/Long of the vessel</li>
+            <li>&#8226; Number of people on board</li>
+            <li>&#8226; Contact number for the member on board</li>
+          </ul>
         </div>
 
         {/* Search */}
