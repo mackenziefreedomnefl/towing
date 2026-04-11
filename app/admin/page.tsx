@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -133,32 +133,87 @@ function TransferModal({
   onCancel,
 }: {
   boat: Boat;
-  onSave: (oldBoat: Boat, newBoatId: string, note: string) => void;
+  onSave: (oldBoat: Boat, newBoat: Omit<Boat, 'id' | 'archived'>, note: string) => void;
   onCancel: () => void;
 }) {
-  const [newBtNumber, setNewBtNumber] = useState('');
+  const [form, setForm] = useState({
+    boat_id: '',
+    hin: boat.hin,
+    fl_number: boat.fl_number,
+    boat_name: boat.boat_name,
+    make: boat.make,
+    home_port: boat.home_port,
+    year: boat.year,
+    length: boat.length,
+    annual_dues: boat.annual_dues,
+    active: boat.active,
+    renewed: boat.renewed,
+    transfer: `From ${boat.boat_id}`,
+    expiration: boat.expiration,
+  });
   const [note, setNote] = useState('');
+  const set = (field: string, value: string | number | null) =>
+    setForm((f) => ({ ...f, [field]: value }));
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
         <h2 className="text-lg font-bold mb-1">Transfer BT#</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Archive <strong>{boat.boat_id}</strong> ({boat.boat_name}) and create a new BT# entry with the same boat info.
+          Archiving <strong>{boat.boat_id}</strong> ({boat.boat_name}). Fill in the new boat info below.
         </p>
-        <div className="space-y-3">
+        <div className="bg-gray-50 rounded-lg p-3 mb-4 text-xs text-gray-500">
+          <span className="font-semibold">Old:</span> {boat.boat_id} &mdash; {boat.boat_name} &mdash; {boat.fl_number} &mdash; {boat.make} {boat.length} ({boat.year})
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New BT Number</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={newBtNumber} onChange={(e) => setNewBtNumber(e.target.value)} placeholder="BT10999" autoFocus />
+            <label className="block text-sm font-medium text-gray-700 mb-1">New BT Number *</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.boat_id} onChange={(e) => set('boat_id', e.target.value)} placeholder="BT10999" autoFocus />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
-            <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for transfer..." />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Boat Name</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.boat_name} onChange={(e) => set('boat_name', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">HIN</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.hin} onChange={(e) => set('hin', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">FL#</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.fl_number} onChange={(e) => set('fl_number', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.make} onChange={(e) => set('make', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Home Port</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.home_port} onChange={(e) => set('home_port', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value ? parseInt(e.target.value) : null)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Length</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.length} onChange={(e) => set('length', e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" type="number" value={form.annual_dues ?? ''} onChange={(e) => set('annual_dues', e.target.value ? parseInt(e.target.value) : null)} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expiration</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" type="date" value={form.expiration} onChange={(e) => set('expiration', e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+            <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for transfer, what changed..." />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-5">
           <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-          <button onClick={() => onSave(boat, newBtNumber, note)} disabled={!newBtNumber.trim()} className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50">Transfer</button>
+          <button onClick={() => onSave(boat, form, note)} disabled={!form.boat_id.trim()} className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50">Transfer</button>
         </div>
       </div>
     </div>
@@ -417,6 +472,12 @@ export default function AdminPage() {
   const [viewing, setViewing] = useState<Boat | null>(null);
   const [archiveConfirm, setArchiveConfirm] = useState<Boat | null>(null);
   const [tab, setTab] = useState<'boats' | 'archived' | 'activity'>('boats');
+  const [sortCol, setSortCol] = useState<string>('boat_id');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [boatNotes, setBoatNotes] = useState<Record<number, BoatNote[]>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
+  const [newNoteText, setNewNoteText] = useState<Record<number, string>>({});
+  const [newNoteAuthor, setNewNoteAuthor] = useState('');
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_auth') === 'true') setAuthed(true);
@@ -450,6 +511,64 @@ export default function AdminPage() {
   useEffect(() => {
     if (authed && tab === 'activity') loadActivity();
   }, [authed, tab, loadActivity]);
+
+  function handleSort(col: string) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedBoats = useMemo(() => {
+    return [...boats].sort((a, b) => {
+      const aVal = (a as unknown as Record<string, unknown>)[sortCol];
+      const bVal = (b as unknown as Record<string, unknown>)[sortCol];
+      const aStr = aVal == null ? '' : String(aVal);
+      const bStr = bVal == null ? '' : String(bVal);
+      const aNum = Number(aStr);
+      const bNum = Number(bStr);
+      let cmp: number;
+      if (!isNaN(aNum) && !isNaN(bNum) && aStr !== '' && bStr !== '') {
+        cmp = aNum - bNum;
+      } else {
+        cmp = aStr.localeCompare(bStr);
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [boats, sortCol, sortDir]);
+
+  async function loadNotesFor(boatId: number) {
+    const res = await fetch(`/api/boats/${boatId}/notes`);
+    const notes = await res.json();
+    setBoatNotes(prev => ({ ...prev, [boatId]: notes }));
+  }
+
+  function toggleNotes(boatId: number) {
+    setExpandedNotes(prev => {
+      const next = new Set(prev);
+      if (next.has(boatId)) {
+        next.delete(boatId);
+      } else {
+        next.add(boatId);
+        loadNotesFor(boatId);
+      }
+      return next;
+    });
+  }
+
+  async function handleAddNote(boatId: number, btNumber: string) {
+    const text = newNoteText[boatId];
+    if (!text?.trim()) return;
+    await fetch(`/api/boats/${boatId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author: newNoteAuthor || 'Admin', note: text }),
+    });
+    setNewNoteText(prev => ({ ...prev, [boatId]: '' }));
+    loadNotesFor(boatId);
+  }
 
   async function handleAdd(boat: Omit<Boat, 'id' | 'archived'>) {
     await fetch('/api/boats', {
@@ -488,26 +607,39 @@ export default function AdminPage() {
     load();
   }
 
-  async function handleTransfer(oldBoat: Boat, newBoatId: string, note: string) {
-    // Archive the old boat
-    await fetch(`/api/boats/${oldBoat.id}/archive`, { method: 'POST' });
-    // Add note to old boat
-    if (note) {
-      await fetch(`/api/boats/${oldBoat.id}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ author: 'System', note: `Transferred to ${newBoatId}. ${note}` }),
-      });
+  async function handleTransfer(oldBoat: Boat, newBoat: Omit<Boat, 'id' | 'archived'>, note: string) {
+    // Build a change summary
+    const fields = ['boat_name', 'hin', 'fl_number', 'make', 'home_port', 'year', 'length', 'annual_dues', 'expiration'] as const;
+    const changes: string[] = [];
+    const oldRec = oldBoat as unknown as Record<string, unknown>;
+    const newRec = newBoat as unknown as Record<string, unknown>;
+    for (const f of fields) {
+      if (String(oldRec[f] ?? '') !== String(newRec[f] ?? '')) {
+        changes.push(`${f}: ${oldRec[f] || '—'} → ${newRec[f] || '—'}`);
+      }
     }
-    // Create new boat with same info but new BT#
-    await fetch('/api/boats', {
+    const changeSummary = changes.length > 0 ? changes.join(', ') : 'No field changes';
+
+    // Archive the old boat
+    await fetch(`/api/boats/${oldBoat.id}/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: `Transferred to ${newBoat.boat_id}` }),
+    });
+    // Add detailed note to old boat
+    await fetch(`/api/boats/${oldBoat.id}/notes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...oldBoat,
-        boat_id: newBoatId,
-        transfer: `From ${oldBoat.boat_id}`,
+        author: 'System',
+        note: `Transferred to ${newBoat.boat_id}. Changes: ${changeSummary}${note ? '. ' + note : ''}`,
       }),
+    });
+    // Create new boat with updated info
+    await fetch('/api/boats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newBoat),
     });
     setTransferring(null);
     load();
@@ -565,55 +697,128 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">BT#</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Boat Name</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">FL#</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Make</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Home Port</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Year</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Length</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Expires</th>
+                    {[
+                      { key: 'boat_id', label: 'BT#' },
+                      { key: 'boat_name', label: 'Boat Name' },
+                      { key: 'fl_number', label: 'FL#' },
+                      { key: 'make', label: 'Make' },
+                      { key: 'home_port', label: 'Home Port' },
+                      { key: 'year', label: 'Year' },
+                      { key: 'length', label: 'Length' },
+                      { key: 'annual_dues', label: 'Rate' },
+                      { key: 'expiration', label: 'Expires' },
+                    ].map(({ key, label }) => (
+                      <th
+                        key={key}
+                        className="px-3 py-3 text-left font-semibold text-gray-600 cursor-pointer select-none hover:text-gray-900 whitespace-nowrap"
+                        onClick={() => handleSort(key)}
+                      >
+                        {label}
+                        {sortCol === key && (
+                          <span className="ml-1 text-blue-500">{sortDir === 'asc' ? '\u25B2' : '\u25BC'}</span>
+                        )}
+                      </th>
+                    ))}
+                    <th className="px-3 py-3 text-left font-semibold text-gray-600">Notes</th>
                     <th className="px-3 py-3 text-left font-semibold text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {boats.map((boat) => (
-                    <tr key={boat.id} className={`border-b border-gray-100 hover:bg-gray-50 ${boat.archived ? 'opacity-60' : ''}`}>
-                      <td className="px-3 py-2">
-                        <button onClick={() => setViewing(boat)} className="font-mono font-medium text-blue-600 hover:underline">{boat.boat_id}</button>
-                      </td>
-                      <td className="px-3 py-2 font-medium">{boat.boat_name}</td>
-                      <td className="px-3 py-2">{boat.fl_number}</td>
-                      <td className="px-3 py-2">{boat.make}</td>
-                      <td className="px-3 py-2">{boat.home_port}</td>
-                      <td className="px-3 py-2">{boat.year}</td>
-                      <td className="px-3 py-2">{boat.length}</td>
-                      <td className="px-3 py-2">
-                        {boat.expiration && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            new Date(boat.expiration) > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {boat.expiration}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-2">
-                          <button onClick={() => setEditing(boat)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
-                          {tab === 'boats' ? (
-                            <>
-                              <button onClick={() => setTransferring(boat)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Transfer</button>
-                              <button onClick={() => setArchiveConfirm(boat)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Archive</button>
-                            </>
-                          ) : (
-                            <button onClick={() => handleUnarchive(boat)} className="text-green-600 hover:text-green-800 text-xs font-medium">Restore</button>
+                  {sortedBoats.map((boat) => (
+                    <React.Fragment key={boat.id}>
+                      <tr className={`border-b border-gray-100 hover:bg-gray-50 ${boat.archived ? 'opacity-60' : ''}`}>
+                        <td className="px-3 py-2">
+                          <button onClick={() => setViewing(boat)} className="font-mono font-medium text-blue-600 hover:underline">{boat.boat_id}</button>
+                        </td>
+                        <td className="px-3 py-2 font-medium">{boat.boat_name}</td>
+                        <td className="px-3 py-2">{boat.fl_number}</td>
+                        <td className="px-3 py-2">{boat.make}</td>
+                        <td className="px-3 py-2">{boat.home_port}</td>
+                        <td className="px-3 py-2">{boat.year}</td>
+                        <td className="px-3 py-2">{boat.length}</td>
+                        <td className="px-3 py-2">{boat.annual_dues ? `$${boat.annual_dues}` : '—'}</td>
+                        <td className="px-3 py-2">
+                          {boat.expiration && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              new Date(boat.expiration) > new Date() ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {boat.expiration}
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => toggleNotes(boat.id)}
+                            className={`text-xs font-medium ${expandedNotes.has(boat.id) ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                          >
+                            {expandedNotes.has(boat.id) ? 'Hide' : 'Show'}
+                            {boatNotes[boat.id]?.length ? ` (${boatNotes[boat.id].length})` : ''}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditing(boat)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                            {tab === 'boats' ? (
+                              <>
+                                <button onClick={() => setTransferring(boat)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Transfer</button>
+                                <button onClick={() => setArchiveConfirm(boat)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Archive</button>
+                              </>
+                            ) : (
+                              <button onClick={() => handleUnarchive(boat)} className="text-green-600 hover:text-green-800 text-xs font-medium">Restore</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedNotes.has(boat.id) && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={11} className="px-4 py-3">
+                            <div className="max-w-2xl">
+                              {/* Add note inline */}
+                              <div className="flex gap-2 mb-3">
+                                <input
+                                  type="text"
+                                  placeholder="Your name"
+                                  value={newNoteAuthor}
+                                  onChange={(e) => setNewNoteAuthor(e.target.value)}
+                                  className="w-28 border rounded px-2 py-1.5 text-xs"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Add a note..."
+                                  value={newNoteText[boat.id] || ''}
+                                  onChange={(e) => setNewNoteText(prev => ({ ...prev, [boat.id]: e.target.value }))}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleAddNote(boat.id, boat.boat_id)}
+                                  className="flex-1 border rounded px-2 py-1.5 text-xs"
+                                />
+                                <button
+                                  onClick={() => handleAddNote(boat.id, boat.boat_id)}
+                                  className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              {/* Notes list */}
+                              {(!boatNotes[boat.id] || boatNotes[boat.id].length === 0) ? (
+                                <p className="text-xs text-gray-400">No notes yet</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {boatNotes[boat.id].map((n) => (
+                                    <div key={n.id} className="text-xs bg-white rounded border border-gray-200 px-3 py-2">
+                                      <span className="font-semibold text-gray-700">{n.author}</span>
+                                      <span className="text-gray-400 ml-2">{new Date(n.created_at + 'Z').toLocaleString()}</span>
+                                      <p className="text-gray-600 mt-0.5">{n.note}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                   {boats.length === 0 && (
-                    <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">{tab === 'archived' ? 'No archived boats' : 'No boats found'}</td></tr>
+                    <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">{tab === 'archived' ? 'No archived boats' : 'No boats found'}</td></tr>
                   )}
                 </tbody>
               </table>
