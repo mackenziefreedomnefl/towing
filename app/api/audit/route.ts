@@ -85,9 +85,10 @@ export async function POST(request: NextRequest) {
   const fleetioHins = new Set(fleetioBoats.map((b) => b.hin));
 
   type FleetioInfo = typeof fleetioBoats[0];
-  type TowingInfo = { boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string };
+  type TowingInfo = { id: number; boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string; hin: string; annual_dues: number | null; active: string; renewed: string; transfer: string };
 
   const toTowingInfo = (b: typeof activeBoats[0]): TowingInfo => ({
+    id: b.id,
     boat_id: b.boat_id,
     boat_name: b.boat_name,
     make: b.make,
@@ -96,10 +97,15 @@ export async function POST(request: NextRequest) {
     length: b.length,
     fl_number: b.fl_number,
     expiration: b.expiration,
+    hin: b.hin,
+    annual_dues: b.annual_dues,
+    active: b.active,
+    renewed: b.renewed,
+    transfer: b.transfer,
   });
 
   const matched: Array<{ hin: string; towing: TowingInfo; fleetio: FleetioInfo; mismatches: string[] }> = [];
-  const towingOnly: Array<{ hin: string } & TowingInfo> = [];
+  const towingOnly: TowingInfo[] = [];
   const fleetioOnly: FleetioInfo[] = [];
 
   for (const fb of fleetioBoats) {
@@ -132,7 +138,7 @@ export async function POST(request: NextRequest) {
 
   for (const [boat, hin] of towingByHin) {
     if (!fleetioHins.has(hin)) {
-      towingOnly.push({ hin, ...toTowingInfo(boat) });
+      towingOnly.push(toTowingInfo(boat));
     }
   }
 

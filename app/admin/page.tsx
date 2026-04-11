@@ -414,6 +414,106 @@ function ArchiveModal({
   );
 }
 
+function AuditEditForm({
+  towing,
+  fleetio,
+  onSave,
+  onCancel,
+}: {
+  towing: { id: number; boat_id: string; boat_name: string; hin: string; fl_number: string; make: string; home_port: string; year: number | null; length: string; annual_dues: number | null; active: string; renewed: string; transfer: string; expiration: string };
+  fleetio: { name: string; fl_number: string; make: string; year: string; length: string; model: string; group: string };
+  onSave: (b: Omit<Boat, 'id' | 'archived'> & { id?: number }) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({ ...towing });
+  const set = (field: string, value: string | number | null) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
+  // Helper: show Fleetio value as clickable hint if different
+  const hint = (towingVal: string | number | null, fleetioVal: string, field: string) => {
+    const tStr = String(towingVal ?? '').trim().toUpperCase();
+    const fStr = fleetioVal.trim().toUpperCase();
+    if (!fStr || tStr === fStr) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          // For year field, parse as number
+          if (field === 'year') {
+            set(field, fleetioVal ? parseInt(fleetioVal) : null);
+          } else {
+            set(field, fleetioVal);
+          }
+        }}
+        className="text-xs text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded px-1 py-0.5 mt-0.5 block truncate max-w-full"
+        title={`Click to use Fleetio value: ${fleetioVal}`}
+      >
+        Fleetio: {fleetioVal}
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Boat ID (BT#)</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50" value={form.boat_id} readOnly />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Boat Name</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.boat_name} onChange={(e) => set('boat_name', e.target.value)} />
+          {hint(towing.boat_name, fleetio.name, 'boat_name')}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">HIN</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50" value={form.hin} readOnly />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">FL#</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.fl_number} onChange={(e) => set('fl_number', e.target.value)} />
+          {hint(towing.fl_number, fleetio.fl_number, 'fl_number')}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.make} onChange={(e) => set('make', e.target.value)} />
+          {hint(towing.make, fleetio.make, 'make')}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Home Port</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.home_port} onChange={(e) => set('home_port', e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value ? parseInt(e.target.value) : null)} />
+          {hint(towing.year, fleetio.year, 'year')}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Length</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.length} onChange={(e) => set('length', e.target.value)} />
+          {hint(towing.length, fleetio.length, 'length')}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" type="number" value={form.annual_dues ?? ''} onChange={(e) => set('annual_dues', e.target.value ? parseInt(e.target.value) : null)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Expiration</label>
+          <input className="w-full border rounded-lg px-3 py-2 text-sm" type="date" value={form.expiration} onChange={(e) => set('expiration', e.target.value)} />
+        </div>
+      </div>
+      {/* Fleetio reference info */}
+      <div className="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
+        <span className="font-semibold">Fleetio reference:</span> {fleetio.name} — {fleetio.make} {fleetio.model} ({fleetio.year}) — {fleetio.length} — FL# {fleetio.fl_number} — {fleetio.group}
+      </div>
+      <div className="flex justify-end gap-3 mt-5">
+        <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+        <button onClick={() => onSave({ ...form, id: towing.id })} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save</button>
+      </div>
+    </>
+  );
+}
+
 function PasscodeGate({ onAuth }: { onAuth: () => void }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -480,16 +580,18 @@ export default function AdminPage() {
   const [newNoteText, setNewNoteText] = useState<Record<number, string>>({});
   const [newNoteAuthor, setNewNoteAuthor] = useState('');
   interface FleetioInfo { hin: string; name: string; make: string; year: string; length: string; model: string; fl_number: string; group: string; fleetio_id: string }
-  interface TowingInfo { boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string }
+  interface TowingInfo { id: number; boat_id: string; boat_name: string; make: string; home_port: string; year: number | null; length: string; fl_number: string; expiration: string; hin: string; annual_dues: number | null; active: string; renewed: string; transfer: string }
   const [auditResult, setAuditResult] = useState<{
     summary: { fleetioTotal: number; towingActive: number; matched: number; towingOnly: number; fleetioOnly: number; withMismatches: number };
     matched: Array<{ hin: string; towing: TowingInfo; fleetio: FleetioInfo; mismatches: string[] }>;
-    towingOnly: Array<{ hin: string } & TowingInfo>;
+    towingOnly: TowingInfo[];
     fleetioOnly: FleetioInfo[];
     hinColumn: string;
   } | null>(null);
   const [auditUploading, setAuditUploading] = useState(false);
   const [auditError, setAuditError] = useState('');
+  const [auditEditing, setAuditEditing] = useState<{ towing: TowingInfo; fleetio: FleetioInfo } | null>(null);
+  const [lastAuditFile, setLastAuditFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_auth') === 'true') setAuthed(true);
@@ -707,6 +809,7 @@ export default function AdminPage() {
     setAuditUploading(true);
     setAuditError('');
     setAuditResult(null);
+    setLastAuditFile(file);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -721,6 +824,20 @@ export default function AdminPage() {
       setAuditError('Failed to upload file');
     } finally {
       setAuditUploading(false);
+    }
+  }
+
+  async function handleAuditEdit(boat: Omit<Boat, 'id' | 'archived'> & { id?: number }) {
+    if (!boat.id) return;
+    await fetch(`/api/boats/${boat.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(boat),
+    });
+    setAuditEditing(null);
+    // Re-run audit with the same file
+    if (lastAuditFile) {
+      handleAuditUpload(lastAuditFile);
     }
   }
 
@@ -997,6 +1114,7 @@ export default function AdminPage() {
                             <th className="px-3 py-2 text-left font-semibold text-purple-600 bg-purple-50/50">Fleetio Year</th>
                             <th className="px-3 py-2 text-left font-semibold text-gray-600">Length</th>
                             <th className="px-3 py-2 text-left font-semibold text-gray-600">Model</th>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1017,6 +1135,14 @@ export default function AdminPage() {
                                 <td className={`px-3 py-2 ${mm.has('year') ? 'bg-orange-100 font-semibold text-orange-800' : 'text-gray-500'}`}>{m.fleetio.year}</td>
                                 <td className="px-3 py-2 text-gray-500">{m.fleetio.length}</td>
                                 <td className="px-3 py-2 text-gray-500">{m.fleetio.model}</td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    onClick={() => setAuditEditing({ towing: m.towing, fleetio: m.fleetio })}
+                                    className={`text-xs font-medium px-2 py-1 rounded ${hasMismatch ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                  >
+                                    {hasMismatch ? 'Fix' : 'Edit'}
+                                  </button>
+                                </td>
                               </tr>
                             );
                           })}
@@ -1185,6 +1311,24 @@ export default function AdminPage() {
           onArchive={(reason) => handleArchive(reason)}
           onCancel={() => setArchiveConfirm(null)}
         />
+      )}
+
+      {/* Audit Edit Modal — pre-filled with towing data, shows Fleetio values for reference */}
+      {auditEditing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-xl font-bold mb-1">Reconcile Mismatch</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Edit <strong>{auditEditing.towing.boat_id}</strong> to match Fleetio. Fleetio values shown in purple for reference.
+            </p>
+            <AuditEditForm
+              towing={auditEditing.towing}
+              fleetio={auditEditing.fleetio}
+              onSave={handleAuditEdit}
+              onCancel={() => setAuditEditing(null)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
