@@ -6,7 +6,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const boat = archiveBoat(parseInt(id));
+  let reason = '';
+  try {
+    const body = await request.json();
+    reason = body.reason || '';
+  } catch { /* no body */ }
+  const boat = archiveBoat(parseInt(id), reason);
   if (!boat) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(boat);
 }

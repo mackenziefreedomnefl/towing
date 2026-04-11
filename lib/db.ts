@@ -170,12 +170,13 @@ export function updateBoat(id: number, boat: Partial<Omit<Boat, 'id'>>): Boat | 
   return getBoat(id);
 }
 
-export function archiveBoat(id: number): Boat | undefined {
+export function archiveBoat(id: number, reason: string = ''): Boat | undefined {
   const current = getBoat(id);
   if (!current) return undefined;
   getDb().prepare('UPDATE boats SET archived = 1 WHERE id = ?').run(id);
-  logActivity('Archived', current.boat_id, current.boat_name, 'Boat archived');
-  addNote(current.boat_id, 'System', 'Boat was archived');
+  const details = reason ? `Archived — ${reason}` : 'Boat archived';
+  logActivity('Archived', current.boat_id, current.boat_name, details);
+  addNote(current.boat_id, 'System', details);
   return getBoat(id);
 }
 

@@ -287,6 +287,77 @@ function BoatDetailPanel({
   );
 }
 
+const ARCHIVE_REASONS = [
+  'Non-transferable Membership',
+  'Boat Received Tow',
+  'Boat Removed From Fleet',
+  'Opting Out of Program',
+  'Other',
+] as const;
+
+function ArchiveModal({
+  boat,
+  onArchive,
+  onCancel,
+}: {
+  boat: Boat;
+  onArchive: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState('');
+  const [otherText, setOtherText] = useState('');
+
+  const reason = selected === 'Other' ? `Other: ${otherText}` : selected;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Archive Boat</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Why is <strong>{boat.boat_name}</strong> ({boat.boat_id}) being archived?
+        </p>
+        <div className="space-y-2 mb-4">
+          {ARCHIVE_REASONS.map((r) => (
+            <label key={r} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              selected === r ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 hover:bg-gray-50'
+            }`}>
+              <input
+                type="radio"
+                name="reason"
+                value={r}
+                checked={selected === r}
+                onChange={() => setSelected(r)}
+                className="accent-yellow-600"
+              />
+              <span className="text-sm font-medium text-gray-700">{r}</span>
+            </label>
+          ))}
+          {selected === 'Other' && (
+            <input
+              type="text"
+              placeholder="Please specify..."
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1 ml-6"
+              autoFocus
+            />
+          )}
+        </div>
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+          <button
+            onClick={() => onArchive(reason)}
+            disabled={!selected || (selected === 'Other' && !otherText.trim())}
+            className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+          >
+            Archive
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PasscodeGate({ onAuth }: { onAuth: () => void }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -401,9 +472,13 @@ export default function AdminPage() {
     load();
   }
 
-  async function handleArchive() {
+  async function handleArchive(reason: string) {
     if (!archiveConfirm) return;
-    await fetch(`/api/boats/${archiveConfirm.id}/archive`, { method: 'POST' });
+    await fetch(`/api/boats/${archiveConfirm.id}/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
     setArchiveConfirm(null);
     load();
   }
@@ -595,18 +670,11 @@ export default function AdminPage() {
 
       {/* Archive Confirmation */}
       {archiveConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
-            <h2 className="text-lg font-bold mb-2">Archive Boat</h2>
-            <p className="text-gray-600 mb-4">
-              Archive <strong>{archiveConfirm.boat_name}</strong> ({archiveConfirm.boat_id})? It will be hidden from search but preserved in the archived tab.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setArchiveConfirm(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-              <button onClick={handleArchive} className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700">Archive</button>
-            </div>
-          </div>
-        </div>
+        <ArchiveModal
+          boat={archiveConfirm}
+          onArchive={(reason) => handleArchive(reason)}
+          onCancel={() => setArchiveConfirm(null)}
+        />
       )}
     </div>
   );
