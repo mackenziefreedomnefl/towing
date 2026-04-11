@@ -514,6 +514,163 @@ function AuditEditForm({
   );
 }
 
+function AuditAddModal({
+  fleetio,
+  allBoats,
+  onAdd,
+  onCancel,
+}: {
+  fleetio: { hin: string; name: string; make: string; year: string; length: string; model: string; fl_number: string; group: string };
+  allBoats: Boat[];
+  onAdd: (boat: Omit<Boat, 'id' | 'archived'>, existingId?: number) => void;
+  onCancel: () => void;
+}) {
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [btNumber, setBtNumber] = useState('');
+  const [homePort, setHomePort] = useState('');
+  const [existingSearch, setExistingSearch] = useState('');
+  const [selectedExisting, setSelectedExisting] = useState<Boat | null>(null);
+
+  // Parse Fleetio name — strip FL# suffix
+  const cleanName = fleetio.name.replace(/\s*-\s*FL\w+$/, '').replace(/^\(\d+\)\s*/, '').trim();
+
+  // Determine location from Fleetio group
+  const groupLower = fleetio.group.toLowerCase();
+  const defaultPort = groupLower.includes('mandarin') ? 'Julington Creek West'
+    : groupLower.includes('julington') ? 'Julington Creek East'
+    : groupLower.includes('jax beach') ? 'Beach Marine'
+    : groupLower.includes('augustine') || groupLower.includes('camachee') ? 'Camachee Cove'
+    : '';
+
+  const filteredExisting = existingSearch.trim()
+    ? allBoats.filter(b => {
+        const q = existingSearch.toLowerCase();
+        return b.boat_id.toLowerCase().includes(q) ||
+          b.boat_name.toLowerCase().includes(q) ||
+          b.hin.toLowerCase().includes(q) ||
+          b.fl_number.toLowerCase().includes(q);
+      }).slice(0, 8)
+    : [];
+
+  function handleSubmit() {
+    const boatData: Omit<Boat, 'id' | 'archived'> = {
+      boat_id: mode === 'existing' && selectedExisting ? selectedExisting.boat_id : (btNumber.trim() || `JC-${fleetio.fl_number}`),
+      hin: fleetio.hin,
+      fl_number: fleetio.fl_number,
+      boat_name: cleanName,
+      make: fleetio.make,
+      home_port: homePort || defaultPort,
+      year: fleetio.year ? parseInt(fleetio.year) : null,
+      length: fleetio.length,
+      annual_dues: null,
+      active: '',
+      renewed: '',
+      transfer: mode === 'existing' && selectedExisting ? `From ${selectedExisting.boat_id}` : '',
+      expiration: mode === 'existing' && selectedExisting ? selectedExisting.expiration : '',
+    };
+    onAdd(boatData, mode === 'existing' && selectedExisting ? selectedExisting.id : undefined);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6">
+        <h2 className="text-lg font-bold mb-1">Add Boat from Fleetio</h2>
+        {/* Fleetio info */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700 mb-4">
+          <span className="font-semibold">Fleetio:</span> {fleetio.name} — {fleetio.make} ({fleetio.year}) — HIN: {fleetio.hin} — FL# {fleetio.fl_number}
+        </div>
+
+        {/* Mode toggle */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => { setMode('new'); setSelectedExisting(null); }}
+            className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg border ${mode === 'new' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-500'}`}
+          >
+            Add as New Boat
+          </button>
+          <button
+            onClick={() => setMode('existing')}
+            className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg border ${mode === 'existing' ? 'bg-orange-50 border-orange-300 text-orange-700' : 'border-gray-200 text-gray-500'}`}
+          >
+            Update Existing BT#
+          </button>
+        </div>
+
+        {mode === 'new' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">BT Number</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={btNumber}
+                onChange={(e) => setBtNumber(e.target.value)}
+                placeholder="Leave blank for BoatUS (no membership) card"
+              />
+              <p className="text-xs text-gray-400 mt-1">Enter a BT# for BMC Towing coverage, or leave blank for a BoatUS (red) card</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Home Port</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={homePort || defaultPort}
+                onChange={(e) => setHomePort(e.target.value)}
+                placeholder="Beach Marine"
+              />
+            </div>
+          </div>
+        )}
+
+        {mode === 'existing' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search for existing boat to update</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={existingSearch}
+                onChange={(e) => setExistingSearch(e.target.value)}
+                placeholder="Search by BT#, name, HIN, FL#..."
+                autoFocus
+              />
+            </div>
+            {filteredExisting.length > 0 && (
+              <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                {filteredExisting.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => { setSelectedExisting(b); setExistingSearch(''); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${selectedExisting?.id === b.id ? 'bg-blue-50' : ''}`}
+                  >
+                    <span className="font-mono font-medium text-blue-600">{b.boat_id}</span>
+                    <span className="ml-2">{b.boat_name}</span>
+                    <span className="ml-2 text-gray-400 text-xs">{b.hin}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedExisting && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+                <p className="font-semibold text-blue-800 mb-1">Will update this boat with Fleetio info:</p>
+                <p className="text-blue-700">{selectedExisting.boat_id} — {selectedExisting.boat_name} — HIN: {selectedExisting.hin} — FL# {selectedExisting.fl_number}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 mt-5">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={mode === 'existing' && !selectedExisting}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {mode === 'existing' ? 'Update Boat' : (btNumber.trim() ? 'Add with BT#' : 'Add as BoatUS')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PasscodeGate({ onAuth }: { onAuth: () => void }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -591,6 +748,7 @@ export default function AdminPage() {
   const [auditUploading, setAuditUploading] = useState(false);
   const [auditError, setAuditError] = useState('');
   const [auditEditing, setAuditEditing] = useState<{ towing: TowingInfo; fleetio: FleetioInfo } | null>(null);
+  const [auditAdding, setAuditAdding] = useState<FleetioInfo | null>(null);
   const [lastAuditFile, setLastAuditFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -835,10 +993,28 @@ export default function AdminPage() {
       body: JSON.stringify(boat),
     });
     setAuditEditing(null);
-    // Re-run audit with the same file
-    if (lastAuditFile) {
-      handleAuditUpload(lastAuditFile);
+    if (lastAuditFile) handleAuditUpload(lastAuditFile);
+  }
+
+  async function handleAuditAdd(boatData: Omit<Boat, 'id' | 'archived'>, existingId?: number) {
+    if (existingId) {
+      // Update existing boat with new Fleetio info
+      await fetch(`/api/boats/${existingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(boatData),
+      });
+    } else {
+      // Create new boat
+      await fetch('/api/boats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(boatData),
+      });
     }
+    setAuditAdding(null);
+    load();
+    if (lastAuditFile) handleAuditUpload(lastAuditFile);
   }
 
   if (!authed) return <PasscodeGate onAuth={() => setAuthed(true)} />;
@@ -1213,6 +1389,7 @@ export default function AdminPage() {
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Length</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Model</th>
                             <th className="px-4 py-2 text-left font-semibold text-gray-600">Group</th>
+                            <th className="px-4 py-2 text-left font-semibold text-gray-600"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1226,6 +1403,14 @@ export default function AdminPage() {
                               <td className="px-4 py-2">{b.length}</td>
                               <td className="px-4 py-2">{b.model}</td>
                               <td className="px-4 py-2 text-xs">{b.group}</td>
+                              <td className="px-4 py-2">
+                                <button
+                                  onClick={() => setAuditAdding(b)}
+                                  className="text-xs font-medium px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                >
+                                  Add
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1329,6 +1514,16 @@ export default function AdminPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* Audit Add Modal */}
+      {auditAdding && (
+        <AuditAddModal
+          fleetio={auditAdding}
+          allBoats={boats}
+          onAdd={handleAuditAdd}
+          onCancel={() => setAuditAdding(null)}
+        />
       )}
     </div>
   );

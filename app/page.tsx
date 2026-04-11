@@ -90,6 +90,7 @@ export default function Home() {
               className="h-10 w-auto"
               priority
             />
+            <h1 className="text-lg font-bold text-gray-800">FBC NEFL TOWING</h1>
           </div>
           <Link
             href="/admin"
