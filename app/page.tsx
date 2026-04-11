@@ -21,6 +21,11 @@ interface Boat {
   expiration: string;
 }
 
+// JC boats without BT# use a different towing provider
+function isAltProvider(boat: Boat) {
+  return boat.boat_id.startsWith('JCE-') || boat.boat_id.startsWith('JCW-');
+}
+
 export default function Home() {
   const [query, setQuery] = useState('');
   const [allBoats, setAllBoats] = useState<Boat[]>([]);
@@ -67,7 +72,6 @@ export default function Home() {
       if (!groups[port]) groups[port] = [];
       groups[port].push(boat);
     }
-    // Sort locations alphabetically
     const sorted: [string, Boat[]][] = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
     return sorted;
   }, [filtered]);
@@ -98,22 +102,8 @@ export default function Home() {
 
       {/* Main */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
-        {/* Phone Banner */}
-        <div className="bg-blue-600 text-white rounded-xl p-6 mb-6 text-center shadow-lg">
-          <p className="text-sm font-medium uppercase tracking-wide opacity-90 mb-1">
-            BMC Towing - Call to Request a Tow
-          </p>
-          <a
-            href="tel:6199296743"
-            className="text-4xl font-bold tracking-wider hover:underline"
-          >
-            619-929-6743
-          </a>
-          <p className="text-sm opacity-75 mt-2">Contact: Rob (California time)</p>
-        </div>
-
         {/* Call Checklist */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 text-sm">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm">
           <p className="font-semibold text-amber-800 mb-2">Before calling, have ready:</p>
           <ul className="space-y-1 text-amber-700">
             <li>&#8226; Lat/Long of the vessel</li>
@@ -173,60 +163,89 @@ export default function Home() {
               {location} <span className="text-gray-400 font-normal">({boats.length})</span>
             </h2>
             <div className="space-y-3">
-              {boats.map((boat) => (
-                <div
-                  key={boat.id}
-                  className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900">
-                        {boat.boat_name}
-                      </h3>
-                      <p className="text-blue-600 font-mono font-bold text-lg">
-                        {boat.boat_id}
-                      </p>
-                    </div>
-                    {boat.expiration && (
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        new Date(boat.expiration) > new Date()
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {new Date(boat.expiration) > new Date() ? 'Active' : 'Expired'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500 block">FL#</span>
-                      <span className="font-medium">{boat.fl_number || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block">HIN</span>
-                      <span className="font-medium font-mono text-xs">{boat.hin || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block">Make</span>
-                      <span className="font-medium">{boat.make || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block">Length</span>
-                      <span className="font-medium">{boat.length || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block">Year</span>
-                      <span className="font-medium">{boat.year || '—'}</span>
-                    </div>
-                    {boat.expiration && (
+              {boats.map((boat) => {
+                const jc = isAltProvider(boat);
+                return (
+                  <div
+                    key={boat.id}
+                    className={`rounded-xl border shadow-sm p-5 hover:shadow-md transition-shadow ${
+                      jc ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
                       <div>
-                        <span className="text-gray-500 block">Expires</span>
-                        <span className="font-medium">{boat.expiration}</span>
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {boat.boat_name}
+                        </h3>
+                        <p className={`font-mono font-bold text-lg ${jc ? 'text-red-600' : 'text-blue-600'}`}>
+                          {boat.boat_id.startsWith('JC') ? boat.fl_number || boat.boat_id : boat.boat_id}
+                        </p>
                       </div>
-                    )}
+                      {boat.expiration ? (
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          new Date(boat.expiration) > new Date()
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {new Date(boat.expiration) > new Date() ? 'Active' : 'Expired'}
+                        </span>
+                      ) : jc ? (
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                          Different Provider
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500 block">FL#</span>
+                        <span className="font-medium">{boat.fl_number || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">HIN</span>
+                        <span className="font-medium font-mono text-xs">{boat.hin || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Make</span>
+                        <span className="font-medium">{boat.make || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Length</span>
+                        <span className="font-medium">{boat.length || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Year</span>
+                        <span className="font-medium">{boat.year || '—'}</span>
+                      </div>
+                      {boat.expiration && (
+                        <div>
+                          <span className="text-gray-500 block">Expires</span>
+                          <span className="font-medium">{boat.expiration}</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Contact info in the card */}
+                    <div className={`mt-4 rounded-lg p-3 text-center ${
+                      jc ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                    }`}>
+                      {jc ? (
+                        <>
+                          <p className="text-xs font-medium uppercase tracking-wide opacity-90">Call for Towing</p>
+                          <a href="tel:3866756231" className="text-2xl font-bold tracking-wider hover:underline">
+                            (386) 675-6231
+                          </a>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs font-medium uppercase tracking-wide opacity-90">BMC Towing — Contact: Rob (California time)</p>
+                          <a href="tel:6199296743" className="text-2xl font-bold tracking-wider hover:underline">
+                            619-929-6743
+                          </a>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -234,7 +253,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-400">
-        Freedom Boat Club &mdash; BMC Towing Membership
+        Freedom Boat Club &mdash; Towing Membership
       </footer>
     </div>
   );
