@@ -28,6 +28,7 @@ interface ActivityEntry {
   boat_id: string;
   boat_name: string;
   details: string;
+  undone: number;
   created_at: string;
 }
 
@@ -607,6 +608,34 @@ export default function AdminPage() {
     load();
   }
 
+  async function handleRenew(boat: Boat) {
+    if (!confirm(`Renew ${boat.boat_name} (${boat.boat_id})?\n\nThis will extend the expiration by 1 year.`)) return;
+    await fetch(`/api/boats/${boat.id}/renew`, { method: 'POST' });
+    load();
+  }
+
+  async function handleUndo(activityId: number) {
+    const res = await fetch(`/api/activity/${activityId}/undo`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      loadActivity();
+      load();
+    } else {
+      alert(data.message);
+    }
+  }
+
+  async function handleRedo(activityId: number) {
+    const res = await fetch(`/api/activity/${activityId}/redo`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      loadActivity();
+      load();
+    } else {
+      alert(data.message);
+    }
+  }
+
   async function handleTransfer(oldBoat: Boat, newBoat: Omit<Boat, 'id' | 'archived'>, note: string) {
     // Build a change summary
     const fields = ['boat_name', 'hin', 'fl_number', 'make', 'home_port', 'year', 'length', 'annual_dues', 'expiration'] as const;
@@ -655,7 +684,9 @@ export default function AdminPage() {
             <Image src="/FBCLogoCMYK.png" alt="Freedom Boat Club" width={160} height={50} className="h-10 w-auto" priority />
             <span className="text-lg font-semibold text-gray-700">Admin</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <a href="/api/export?format=xlsx" className="text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50">Excel</a>
+            <a href="/api/export?format=csv" className="text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50">CSV</a>
             <button onClick={() => { sessionStorage.removeItem('admin_auth'); setAuthed(false); }} className="text-sm text-gray-400 hover:text-gray-600 font-medium">Lock</button>
             <Link href="/" className="text-sm text-blue-600 hover:text-blue-800 font-medium">&larr; Back to Search</Link>
           </div>
@@ -760,6 +791,7 @@ export default function AdminPage() {
                             <button onClick={() => setEditing(boat)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
                             {tab === 'boats' ? (
                               <>
+                                <button onClick={() => handleRenew(boat)} className="text-green-600 hover:text-green-800 text-xs font-medium">Renew</button>
                                 <button onClick={() => setTransferring(boat)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Transfer</button>
                                 <button onClick={() => setArchiveConfirm(boat)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Archive</button>
                               </>
@@ -837,24 +869,44 @@ export default function AdminPage() {
               <div className="px-5 py-12 text-center text-gray-400">No activity yet</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {activity.map((entry) => (
-                  <div key={entry.id} className="px-5 py-3 flex items-start gap-3">
-                    <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
-                      entry.action === 'Added' ? 'bg-green-100 text-green-700' :
-                      entry.action === 'Edited' ? 'bg-blue-100 text-blue-700' :
-                      entry.action === 'Archived' ? 'bg-yellow-100 text-yellow-700' :
-                      entry.action === 'Unarchived' ? 'bg-purple-100 text-purple-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>{entry.action}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">
-                        {entry.boat_name} <span className="text-gray-400 font-mono text-xs">{entry.boat_id}</span>
-                      </p>
-                      {entry.details && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.details}</p>}
+                {activity.map((entry) => {
+                  const created = new Date(entry.created_at + 'Z');
+                  const daysSince = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+                  const canUndoRedo = daysSince <= 7 && entry.action !== 'Undo' && entry.action !== 'Redo';
+                  return (
+                    <div key={entry.id} className={`px-5 py-3 flex items-start gap-3 ${entry.undone ? 'opacity-50' : ''}`}>
+                      <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
+                        entry.action === 'Added' ? 'bg-green-100 text-green-700' :
+                        entry.action === 'Edited' ? 'bg-blue-100 text-blue-700' :
+                        entry.action === 'Renewed' ? 'bg-emerald-100 text-emerald-700' :
+                        entry.action === 'Archived' ? 'bg-yellow-100 text-yellow-700' :
+                        entry.action === 'Unarchived' ? 'bg-purple-100 text-purple-700' :
+                        entry.action === 'Undo' ? 'bg-gray-200 text-gray-600' :
+                        entry.action === 'Redo' ? 'bg-gray-200 text-gray-600' :
+                        'bg-red-100 text-red-700'
+                      }`}>{entry.action}{entry.undone ? ' (undone)' : ''}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {entry.boat_name} <span className="text-gray-400 font-mono text-xs">{entry.boat_id}</span>
+                        </p>
+                        {entry.details && <p className="text-xs text-gray-500 mt-0.5">{entry.details}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {canUndoRedo && !entry.undone && (
+                          <button onClick={() => handleUndo(entry.id)} className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-0.5 hover:bg-red-50">
+                            Undo
+                          </button>
+                        )}
+                        {canUndoRedo && entry.undone === 1 && (
+                          <button onClick={() => handleRedo(entry.id)} className="text-xs font-medium text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-2 py-0.5 hover:bg-blue-50">
+                            Redo
+                          </button>
+                        )}
+                        <time className="text-xs text-gray-400 whitespace-nowrap">{created.toLocaleString()}</time>
+                      </div>
                     </div>
-                    <time className="text-xs text-gray-400 whitespace-nowrap">{new Date(entry.created_at + 'Z').toLocaleString()}</time>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
