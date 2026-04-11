@@ -3,7 +3,8 @@ import { getAllBoats, searchBoats, createBoat } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q');
-  const boats = q ? searchBoats(q) : getAllBoats();
+  const includeArchived = request.nextUrl.searchParams.get('archived') === 'true';
+  const boats = q ? searchBoats(q) : getAllBoats(includeArchived);
   return NextResponse.json(boats);
 }
 

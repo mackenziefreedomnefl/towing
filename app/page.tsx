@@ -80,7 +80,7 @@ export default function Home() {
           >
             619-929-6743
           </a>
-          <p className="text-sm opacity-75 mt-2">Rob - San Diego</p>
+          <p className="text-sm opacity-75 mt-2">Robert Butler - San Diego</p>
         </div>
 
         {/* Search */}

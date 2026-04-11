@@ -19,6 +19,7 @@ interface Boat {
   renewed: string;
   transfer: string;
   expiration: string;
+  archived: number;
 }
 
 interface ActivityEntry {
@@ -30,7 +31,15 @@ interface ActivityEntry {
   created_at: string;
 }
 
-const emptyBoat: Omit<Boat, 'id'> = {
+interface BoatNote {
+  id: number;
+  boat_id: string;
+  author: string;
+  note: string;
+  created_at: string;
+}
+
+const emptyBoat: Omit<Boat, 'id' | 'archived'> = {
   boat_id: '', hin: '', fl_number: '', boat_name: '', make: '',
   home_port: '', year: null, length: '', annual_dues: null,
   active: '', renewed: '', transfer: '', expiration: '',
@@ -42,8 +51,8 @@ function BoatForm({
   onCancel,
   title,
 }: {
-  boat: Omit<Boat, 'id'> & { id?: number };
-  onSave: (b: Omit<Boat, 'id'> & { id?: number }) => void;
+  boat: Omit<Boat, 'id' | 'archived'> & { id?: number };
+  onSave: (b: Omit<Boat, 'id' | 'archived'> & { id?: number }) => void;
   onCancel: () => void;
   title: string;
 }) {
@@ -110,12 +119,168 @@ function BoatForm({
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
-            Cancel
-          </button>
-          <button onClick={() => onSave(form)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-            Save
-          </button>
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+          <button onClick={() => onSave(form)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransferModal({
+  boat,
+  onSave,
+  onCancel,
+}: {
+  boat: Boat;
+  onSave: (oldBoat: Boat, newBoatId: string, note: string) => void;
+  onCancel: () => void;
+}) {
+  const [newBtNumber, setNewBtNumber] = useState('');
+  const [note, setNote] = useState('');
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <h2 className="text-lg font-bold mb-1">Transfer BT#</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Archive <strong>{boat.boat_id}</strong> ({boat.boat_name}) and create a new BT# entry with the same boat info.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">New BT Number</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={newBtNumber} onChange={(e) => setNewBtNumber(e.target.value)} placeholder="BT10999" autoFocus />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
+            <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason for transfer..." />
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-5">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+          <button onClick={() => onSave(boat, newBtNumber, note)} disabled={!newBtNumber.trim()} className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50">Transfer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoatDetailPanel({
+  boat,
+  onClose,
+  onRefresh,
+}: {
+  boat: Boat;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [notes, setNotes] = useState<BoatNote[]>([]);
+  const [history, setHistory] = useState<ActivityEntry[]>([]);
+  const [newNote, setNewNote] = useState('');
+  const [author, setAuthor] = useState('');
+
+  useEffect(() => {
+    fetch(`/api/boats/${boat.id}/notes`).then(r => r.json()).then(setNotes);
+    fetch(`/api/boats/${boat.id}/history`).then(r => r.json()).then(setHistory);
+  }, [boat.id]);
+
+  async function handleAddNote() {
+    if (!newNote.trim()) return;
+    await fetch(`/api/boats/${boat.id}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author: author || 'Admin', note: newNote }),
+    });
+    setNewNote('');
+    const res = await fetch(`/api/boats/${boat.id}/notes`);
+    setNotes(await res.json());
+    onRefresh();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold">{boat.boat_name}</h2>
+            <p className="text-blue-600 font-mono font-bold">{boat.boat_id}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 text-sm mb-6 bg-gray-50 rounded-lg p-4">
+          <div><span className="text-gray-500 block">FL#</span><span className="font-medium">{boat.fl_number || '—'}</span></div>
+          <div><span className="text-gray-500 block">HIN</span><span className="font-medium font-mono text-xs">{boat.hin || '—'}</span></div>
+          <div><span className="text-gray-500 block">Make</span><span className="font-medium">{boat.make || '—'}</span></div>
+          <div><span className="text-gray-500 block">Length</span><span className="font-medium">{boat.length || '—'}</span></div>
+          <div><span className="text-gray-500 block">Year</span><span className="font-medium">{boat.year || '—'}</span></div>
+          <div><span className="text-gray-500 block">Home Port</span><span className="font-medium">{boat.home_port || '—'}</span></div>
+        </div>
+
+        {/* Add Note */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Add Note</h3>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="Your name"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              className="w-32 border rounded-lg px-3 py-2 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Write a note..."
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
+              className="flex-1 border rounded-lg px-3 py-2 text-sm"
+            />
+            <button onClick={handleAddNote} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">Add</button>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Notes ({notes.length})</h3>
+          {notes.length === 0 ? (
+            <p className="text-sm text-gray-400">No notes yet</p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {notes.map((n) => (
+                <div key={n.id} className="bg-gray-50 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between items-start">
+                    <span className="font-medium text-gray-900">{n.author}</span>
+                    <time className="text-xs text-gray-400">{new Date(n.created_at + 'Z').toLocaleString()}</time>
+                  </div>
+                  <p className="text-gray-700 mt-1">{n.note}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Change History */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Change History</h3>
+          {history.length === 0 ? (
+            <p className="text-sm text-gray-400">No history</p>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {history.map((h) => (
+                <div key={h.id} className="flex items-start gap-2 text-sm py-1">
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                    h.action === 'Added' ? 'bg-green-100 text-green-700' :
+                    h.action === 'Edited' ? 'bg-blue-100 text-blue-700' :
+                    h.action === 'Archived' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>{h.action}</span>
+                  <span className="text-gray-600 flex-1 truncate">{h.details}</span>
+                  <time className="text-xs text-gray-400 whitespace-nowrap">{new Date(h.created_at + 'Z').toLocaleString()}</time>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -162,13 +327,9 @@ function PasscodeGate({ onAuth }: { onAuth: () => void }) {
             autoFocus
           />
           {error && <p className="text-red-600 text-sm text-center mb-3">{error}</p>}
-          <button type="submit" className="w-full py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700">
-            Enter
-          </button>
+          <button type="submit" className="w-full py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700">Enter</button>
         </form>
-        <Link href="/" className="block text-center text-sm text-gray-400 hover:text-gray-600 mt-4">
-          &larr; Back to Search
-        </Link>
+        <Link href="/" className="block text-center text-sm text-gray-400 hover:text-gray-600 mt-4">&larr; Back to Search</Link>
       </div>
     </div>
   );
@@ -181,18 +342,28 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Boat | null>(null);
   const [adding, setAdding] = useState(false);
-  const [deleting, setDeleting] = useState<Boat | null>(null);
-  const [tab, setTab] = useState<'boats' | 'activity'>('boats');
+  const [transferring, setTransferring] = useState<Boat | null>(null);
+  const [viewing, setViewing] = useState<Boat | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<Boat | null>(null);
+  const [tab, setTab] = useState<'boats' | 'archived' | 'activity'>('boats');
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_auth') === 'true') setAuthed(true);
   }, []);
 
   const load = useCallback(async () => {
-    const url = search ? `/api/boats?q=${encodeURIComponent(search)}` : '/api/boats';
+    const includeArchived = tab === 'archived';
+    const url = search
+      ? `/api/boats?q=${encodeURIComponent(search)}&archived=${includeArchived}`
+      : `/api/boats?archived=${includeArchived}`;
     const res = await fetch(url);
-    setBoats(await res.json());
-  }, [search]);
+    const data = await res.json();
+    if (tab === 'archived') {
+      setBoats(data.filter((b: Boat) => b.archived === 1));
+    } else {
+      setBoats(data.filter((b: Boat) => b.archived === 0));
+    }
+  }, [search, tab]);
 
   const loadActivity = useCallback(async () => {
     const res = await fetch('/api/activity');
@@ -209,7 +380,7 @@ export default function AdminPage() {
     if (authed && tab === 'activity') loadActivity();
   }, [authed, tab, loadActivity]);
 
-  async function handleAdd(boat: Omit<Boat, 'id'>) {
+  async function handleAdd(boat: Omit<Boat, 'id' | 'archived'>) {
     await fetch('/api/boats', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -217,10 +388,9 @@ export default function AdminPage() {
     });
     setAdding(false);
     load();
-    loadActivity();
   }
 
-  async function handleEdit(boat: Omit<Boat, 'id'> & { id?: number }) {
+  async function handleEdit(boat: Omit<Boat, 'id' | 'archived'> & { id?: number }) {
     if (!boat.id) return;
     await fetch(`/api/boats/${boat.id}`, {
       method: 'PUT',
@@ -229,15 +399,43 @@ export default function AdminPage() {
     });
     setEditing(null);
     load();
-    loadActivity();
   }
 
-  async function handleDelete() {
-    if (!deleting) return;
-    await fetch(`/api/boats/${deleting.id}`, { method: 'DELETE' });
-    setDeleting(null);
+  async function handleArchive() {
+    if (!archiveConfirm) return;
+    await fetch(`/api/boats/${archiveConfirm.id}/archive`, { method: 'POST' });
+    setArchiveConfirm(null);
     load();
-    loadActivity();
+  }
+
+  async function handleUnarchive(boat: Boat) {
+    await fetch(`/api/boats/${boat.id}/archive`, { method: 'DELETE' });
+    load();
+  }
+
+  async function handleTransfer(oldBoat: Boat, newBoatId: string, note: string) {
+    // Archive the old boat
+    await fetch(`/api/boats/${oldBoat.id}/archive`, { method: 'POST' });
+    // Add note to old boat
+    if (note) {
+      await fetch(`/api/boats/${oldBoat.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author: 'System', note: `Transferred to ${newBoatId}. ${note}` }),
+      });
+    }
+    // Create new boat with same info but new BT#
+    await fetch('/api/boats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...oldBoat,
+        boat_id: newBoatId,
+        transfer: `From ${oldBoat.boat_id}`,
+      }),
+    });
+    setTransferring(null);
+    load();
   }
 
   if (!authed) return <PasscodeGate onAuth={() => setAuthed(true)} />;
@@ -251,41 +449,29 @@ export default function AdminPage() {
             <span className="text-lg font-semibold text-gray-700">Admin</span>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => { sessionStorage.removeItem('admin_auth'); setAuthed(false); }}
-              className="text-sm text-gray-400 hover:text-gray-600 font-medium"
-            >
-              Lock
-            </button>
-            <Link href="/" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-              &larr; Back to Search
-            </Link>
+            <button onClick={() => { sessionStorage.removeItem('admin_auth'); setAuthed(false); }} className="text-sm text-gray-400 hover:text-gray-600 font-medium">Lock</button>
+            <Link href="/" className="text-sm text-blue-600 hover:text-blue-800 font-medium">&larr; Back to Search</Link>
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 max-w-xs">
-          <button
-            onClick={() => setTab('boats')}
-            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              tab === 'boats' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Boats
-          </button>
-          <button
-            onClick={() => setTab('activity')}
-            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              tab === 'activity' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Activity
-          </button>
+        <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 max-w-md">
+          {(['boats', 'archived', 'activity'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors capitalize ${
+                tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
         </div>
 
-        {tab === 'boats' && (
+        {(tab === 'boats' || tab === 'archived') && (
           <>
             <div className="flex items-center justify-between mb-4 gap-4">
               <input
@@ -295,12 +481,9 @@ export default function AdminPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="flex-1 max-w-md px-4 py-2 border rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
               />
-              <button
-                onClick={() => setAdding(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap"
-              >
-                + Add Boat
-              </button>
+              {tab === 'boats' && (
+                <button onClick={() => setAdding(true)} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 whitespace-nowrap">+ Add Boat</button>
+              )}
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
@@ -320,8 +503,10 @@ export default function AdminPage() {
                 </thead>
                 <tbody>
                   {boats.map((boat) => (
-                    <tr key={boat.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 font-mono font-medium text-blue-600">{boat.boat_id}</td>
+                    <tr key={boat.id} className={`border-b border-gray-100 hover:bg-gray-50 ${boat.archived ? 'opacity-60' : ''}`}>
+                      <td className="px-3 py-2">
+                        <button onClick={() => setViewing(boat)} className="font-mono font-medium text-blue-600 hover:underline">{boat.boat_id}</button>
+                      </td>
                       <td className="px-3 py-2 font-medium">{boat.boat_name}</td>
                       <td className="px-3 py-2">{boat.fl_number}</td>
                       <td className="px-3 py-2">{boat.make}</td>
@@ -339,23 +524,26 @@ export default function AdminPage() {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
-                          <button onClick={() => setEditing(boat)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
-                            Edit
-                          </button>
-                          <button onClick={() => setDeleting(boat)} className="text-red-600 hover:text-red-800 text-xs font-medium">
-                            Delete
-                          </button>
+                          <button onClick={() => setEditing(boat)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Edit</button>
+                          {tab === 'boats' ? (
+                            <>
+                              <button onClick={() => setTransferring(boat)} className="text-orange-600 hover:text-orange-800 text-xs font-medium">Transfer</button>
+                              <button onClick={() => setArchiveConfirm(boat)} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">Archive</button>
+                            </>
+                          ) : (
+                            <button onClick={() => handleUnarchive(boat)} className="text-green-600 hover:text-green-800 text-xs font-medium">Restore</button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
                   {boats.length === 0 && (
-                    <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">No boats found</td></tr>
+                    <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">{tab === 'archived' ? 'No archived boats' : 'No boats found'}</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
-            <p className="text-sm text-gray-400 mt-4">{boats.length} boats total</p>
+            <p className="text-sm text-gray-400 mt-4">{boats.length} boats</p>
           </>
         )}
 
@@ -374,21 +562,17 @@ export default function AdminPage() {
                     <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap ${
                       entry.action === 'Added' ? 'bg-green-100 text-green-700' :
                       entry.action === 'Edited' ? 'bg-blue-100 text-blue-700' :
+                      entry.action === 'Archived' ? 'bg-yellow-100 text-yellow-700' :
+                      entry.action === 'Unarchived' ? 'bg-purple-100 text-purple-700' :
                       'bg-red-100 text-red-700'
-                    }`}>
-                      {entry.action}
-                    </span>
+                    }`}>{entry.action}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900">
                         {entry.boat_name} <span className="text-gray-400 font-mono text-xs">{entry.boat_id}</span>
                       </p>
-                      {entry.details && (
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.details}</p>
-                      )}
+                      {entry.details && <p className="text-xs text-gray-500 mt-0.5 truncate">{entry.details}</p>}
                     </div>
-                    <time className="text-xs text-gray-400 whitespace-nowrap">
-                      {new Date(entry.created_at + 'Z').toLocaleString()}
-                    </time>
+                    <time className="text-xs text-gray-400 whitespace-nowrap">{new Date(entry.created_at + 'Z').toLocaleString()}</time>
                   </div>
                 ))}
               </div>
@@ -398,40 +582,28 @@ export default function AdminPage() {
       </main>
 
       {/* Add Modal */}
-      {adding && (
-        <BoatForm
-          boat={emptyBoat}
-          onSave={handleAdd}
-          onCancel={() => setAdding(false)}
-          title="Add New Boat"
-        />
-      )}
+      {adding && <BoatForm boat={emptyBoat} onSave={handleAdd} onCancel={() => setAdding(false)} title="Add New Boat" />}
 
       {/* Edit Modal */}
-      {editing && (
-        <BoatForm
-          boat={editing}
-          onSave={handleEdit}
-          onCancel={() => setEditing(null)}
-          title={`Edit ${editing.boat_name}`}
-        />
-      )}
+      {editing && <BoatForm boat={editing} onSave={handleEdit} onCancel={() => setEditing(null)} title={`Edit ${editing.boat_name}`} />}
 
-      {/* Delete Confirmation */}
-      {deleting && (
+      {/* Transfer Modal */}
+      {transferring && <TransferModal boat={transferring} onSave={handleTransfer} onCancel={() => setTransferring(null)} />}
+
+      {/* Boat Detail / Notes Panel */}
+      {viewing && <BoatDetailPanel boat={viewing} onClose={() => setViewing(null)} onRefresh={load} />}
+
+      {/* Archive Confirmation */}
+      {archiveConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
-            <h2 className="text-lg font-bold mb-2">Delete Boat</h2>
+            <h2 className="text-lg font-bold mb-2">Archive Boat</h2>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to remove <strong>{deleting.boat_name}</strong> ({deleting.boat_id})?
+              Archive <strong>{archiveConfirm.boat_name}</strong> ({archiveConfirm.boat_id})? It will be hidden from search but preserved in the archived tab.
             </p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleting(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
-                Cancel
-              </button>
-              <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">
-                Delete
-              </button>
+              <button onClick={() => setArchiveConfirm(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleArchive} className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 rounded-lg hover:bg-yellow-700">Archive</button>
             </div>
           </div>
         </div>
