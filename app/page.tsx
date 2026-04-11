@@ -99,6 +99,9 @@ export default function Home() {
             Admin
           </Link>
         </div>
+        <div className="max-w-4xl mx-auto px-4 pb-3 text-xs text-gray-500">
+          Have ready: Lat/Long &nbsp;&#8226;&nbsp; # on board &nbsp;&#8226;&nbsp; Member contact # &nbsp;&#8226;&nbsp; Create an incident report
+        </div>
       </header>
 
       {/* Main */}
@@ -225,10 +228,6 @@ export default function Home() {
                             (386) 675-6231
                           </a>
                           <p className="text-xs mt-1 font-semibold opacity-90">Notify Ops Management Before Calling for Tow</p>
-                          <div className="mt-2 text-xs opacity-80 text-left inline-block">
-                            <p className="font-semibold mb-0.5">Have ready:</p>
-                            <p>&#8226; Lat/Long &nbsp;&#8226; # on board &nbsp;&#8226; Member contact #</p>
-                          </div>
                         </>
                       ) : (
                         <>
