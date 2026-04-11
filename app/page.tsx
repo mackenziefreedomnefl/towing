@@ -25,6 +25,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [allBoats, setAllBoats] = useState<Boat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [locationFilter, setLocationFilter] = useState('All');
 
   useEffect(() => {
     fetch('/api/boats').then(r => r.json()).then(data => {
@@ -33,20 +34,31 @@ export default function Home() {
     });
   }, []);
 
+  const locations = useMemo(() => {
+    const ports = new Set(allBoats.map(b => b.home_port || 'Unknown'));
+    return ['All', ...Array.from(ports).sort()];
+  }, [allBoats]);
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return allBoats;
-    const q = query.toLowerCase();
-    return allBoats.filter(b =>
-      b.boat_id.toLowerCase().includes(q) ||
-      b.boat_name.toLowerCase().includes(q) ||
-      b.fl_number.toLowerCase().includes(q) ||
-      b.hin.toLowerCase().includes(q) ||
-      b.make.toLowerCase().includes(q) ||
-      b.home_port.toLowerCase().includes(q) ||
-      (b.year && String(b.year).includes(q)) ||
-      b.length.toLowerCase().includes(q)
-    );
-  }, [allBoats, query]);
+    let result = allBoats;
+    if (locationFilter !== 'All') {
+      result = result.filter(b => (b.home_port || 'Unknown') === locationFilter);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      result = result.filter(b =>
+        b.boat_id.toLowerCase().includes(q) ||
+        b.boat_name.toLowerCase().includes(q) ||
+        b.fl_number.toLowerCase().includes(q) ||
+        b.hin.toLowerCase().includes(q) ||
+        b.make.toLowerCase().includes(q) ||
+        b.home_port.toLowerCase().includes(q) ||
+        (b.year && String(b.year).includes(q)) ||
+        b.length.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [allBoats, query, locationFilter]);
 
   const grouped = useMemo(() => {
     const groups: Record<string, Boat[]> = {};
@@ -123,9 +135,24 @@ export default function Home() {
             autoFocus
           />
           {!loading && (
-            <p className="text-xs text-gray-400 mt-2 text-right">
-              {filtered.length} of {allBoats.length} boats
-            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {locations.map((loc) => (
+                <button
+                  key={loc}
+                  onClick={() => setLocationFilter(loc)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    locationFilter === loc
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {loc}
+                </button>
+              ))}
+              <span className="ml-auto text-xs text-gray-400 self-center">
+                {filtered.length} of {allBoats.length} boats
+              </span>
+            </div>
           )}
         </div>
 
