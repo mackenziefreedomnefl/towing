@@ -102,16 +102,6 @@ export default function Home() {
 
       {/* Main */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
-        {/* Call Checklist */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm">
-          <p className="font-semibold text-amber-800 mb-2">Before calling, have ready:</p>
-          <ul className="space-y-1 text-amber-700">
-            <li>&#8226; Lat/Long of the vessel</li>
-            <li>&#8226; Number of people on board</li>
-            <li>&#8226; Contact number for the member on board</li>
-          </ul>
-        </div>
-
         {/* Search */}
         <div className="mb-6">
           <label htmlFor="search" className="sr-only">Search boats</label>
@@ -234,6 +224,10 @@ export default function Home() {
                             (386) 675-6231
                           </a>
                           <p className="text-xs mt-1 font-semibold opacity-90">Notify Ops Management Before Calling for Tow</p>
+                          <div className="mt-2 text-xs opacity-80 text-left inline-block">
+                            <p className="font-semibold mb-0.5">Have ready:</p>
+                            <p>&#8226; Lat/Long &nbsp;&#8226; # on board &nbsp;&#8226; Member contact #</p>
+                          </div>
                         </>
                       ) : (
                         <>
